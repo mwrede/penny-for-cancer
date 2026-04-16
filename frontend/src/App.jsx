@@ -292,17 +292,19 @@ export default function App() {
       const url = URL.createObjectURL(file)
       const img = new window.Image()
       img.onload = () => {
-        let w = img.width, h = img.height
-        if (w > maxDim || h > maxDim) {
-          const scale = maxDim / Math.max(w, h)
-          w = Math.round(w * scale); h = Math.round(h * scale)
+        let cw = img.width, ch = img.height
+        let scaleBack = 1 // scale factor to convert Roboflow coords back to original
+        if (cw > maxDim || ch > maxDim) {
+          const scale = maxDim / Math.max(cw, ch)
+          cw = Math.round(cw * scale); ch = Math.round(ch * scale)
+          scaleBack = img.width / cw // e.g. 4032/1600 = 2.52
         }
         const canvas = document.createElement('canvas')
-        canvas.width = w; canvas.height = h
-        canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+        canvas.width = cw; canvas.height = ch
+        canvas.getContext('2d').drawImage(img, 0, 0, cw, ch)
         const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
         const b64 = dataUrl.split(',')[1]
-        resolve({ b64, width: img.width, height: img.height, url })
+        resolve({ b64, width: img.width, height: img.height, url, scaleBack })
       }
       img.src = url
     })
@@ -313,8 +315,8 @@ export default function App() {
     setMeasurements(null); setPennyData(null); setClassification(null); setCropImageDataUrl(null)
     try {
       // Compress image for API calls (keeps under Vercel body size limit)
-      const { b64, width, height, url } = await compressImage(file)
-      setImage({ filename: file.name, width, height, url, base64: b64 })
+      const { b64, width, height, url, scaleBack } = await compressImage(file)
+      setImage({ filename: file.name, width, height, url, base64: b64, scaleBack: scaleBack || 1 })
       setStatus({ type: 'success', msg: 'Image loaded. Paint over the mole, then click Detect.' })
     } catch (e) { setStatus({ type: 'error', msg: e.message }) }
   }
@@ -362,15 +364,20 @@ export default function App() {
       if (!pennyArea) throw new Error('No penny detected. Raw response: ' + JSON.stringify(pennyResult).slice(0, 300))
       setPennyData(pennyArea)
 
-      // Step 2: Calculate measurements (simple math — can do client-side too, but keep backend for consistency)
+      // Step 2: Calculate measurements
+      // IMPORTANT: penny area is in compressed-image pixels, mole mask is in original-image pixels
+      // Scale penny area to original resolution: area scales as (scaleBack)^2
       const PENNY_AREA_SQ_IN = 0.448
-      const sqInPerPx = PENNY_AREA_SQ_IN / pennyArea.area
+      const s = image.scaleBack || 1
+      const pennyAreaOrigScale = pennyArea.area * s * s
+      console.log(`Penny area: ${pennyArea.area}px (compressed) → ${Math.round(pennyAreaOrigScale)}px (original scale, scaleBack=${s})`)
+      const sqInPerPx = PENNY_AREA_SQ_IN / pennyAreaOrigScale
       const moleAreaIn = count * sqInPerPx
       const moleAreaMm = moleAreaIn * 645.16
       const moleDiamIn = 2 * Math.sqrt(moleAreaIn / Math.PI)
       const moleDiamMm = moleDiamIn * 25.4
       const calcResult = {
-        penny_pixel_area: Math.round(pennyArea.area * 10) / 10,
+        penny_pixel_area: Math.round(pennyAreaOrigScale),
         mole_pixel_count: count,
         mole_area_sq_inches: Math.round(moleAreaIn * 10000) / 10000,
         mole_area_sq_mm: Math.round(moleAreaMm * 100) / 100,
@@ -870,12 +877,15 @@ function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData }) {
     const ctx = imgCanvasRef.current.getContext('2d')
     ctx.drawImage(imgObjRef.current, 0, 0)
     const bbox = pennyData.bbox
+    // Scale bbox from compressed image coords back to original canvas coords
+    const s = image.scaleBack || 1
     if (bbox) {
-      ctx.strokeStyle = '#00ff88'; ctx.lineWidth = 3
-      const x = bbox.x - bbox.width / 2, y = bbox.y - bbox.height / 2
-      ctx.strokeRect(x, y, bbox.width, bbox.height)
-      ctx.fillStyle = '#00ff88'; ctx.font = 'bold 16px sans-serif'
-      ctx.fillText(`Penny (${pennyData.area.toLocaleString()}px)`, x, y - 6)
+      ctx.strokeStyle = '#00ff88'; ctx.lineWidth = Math.max(3, Math.round(3 * s))
+      const bx = bbox.x * s, by = bbox.y * s, bw = bbox.width * s, bh = bbox.height * s
+      const x = bx - bw / 2, y = by - bh / 2
+      ctx.strokeRect(x, y, bw, bh)
+      ctx.fillStyle = '#00ff88'; ctx.font = `bold ${Math.max(16, Math.round(16 * s))}px sans-serif`
+      ctx.fillText(`Penny (${pennyData.area.toLocaleString()}px)`, x, y - 6 * s)
     } else {
       ctx.fillStyle = '#00ff88'; ctx.font = 'bold 20px sans-serif'
       ctx.fillText(`Penny detected: ${pennyData.area.toLocaleString()}px area`, 10, 30)
