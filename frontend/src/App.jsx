@@ -262,26 +262,35 @@ export default function App() {
     setStatus({ type: '', msg: '' }); setPage('new')
   }
 
+  // Resize image to fit within maxDim and return base64 JPEG (keeps payload under Vercel's 4.5MB limit)
+  function compressImage(file, maxDim = 1600) {
+    return new Promise((resolve) => {
+      const url = URL.createObjectURL(file)
+      const img = new window.Image()
+      img.onload = () => {
+        let w = img.width, h = img.height
+        if (w > maxDim || h > maxDim) {
+          const scale = maxDim / Math.max(w, h)
+          w = Math.round(w * scale); h = Math.round(h * scale)
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = w; canvas.height = h
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.85)
+        const b64 = dataUrl.split(',')[1]
+        resolve({ b64, width: img.width, height: img.height, url })
+      }
+      img.src = url
+    })
+  }
+
   async function handleUpload(file) {
     setStatus({ type: 'loading', msg: 'Uploading...' })
     setMeasurements(null); setPennyData(null); setClassification(null); setCropImageDataUrl(null)
-    // Create local object URL for display + read base64 for API calls
-    const localUrl = URL.createObjectURL(file)
     try {
-      // Read file as base64 for sending to Roboflow directly
-      const b64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result.split(',')[1])
-        reader.onerror = reject
-        reader.readAsDataURL(file)
-      })
-      // Get image dimensions
-      const dims = await new Promise((resolve) => {
-        const img = new window.Image()
-        img.onload = () => resolve({ width: img.width, height: img.height })
-        img.src = localUrl
-      })
-      setImage({ filename: file.name, width: dims.width, height: dims.height, url: localUrl, base64: b64 })
+      // Compress image for API calls (keeps under Vercel body size limit)
+      const { b64, width, height, url } = await compressImage(file)
+      setImage({ filename: file.name, width, height, url, base64: b64 })
       setStatus({ type: 'success', msg: 'Image loaded. Paint over the mole, then click Detect.' })
     } catch (e) { setStatus({ type: 'error', msg: e.message }) }
   }
