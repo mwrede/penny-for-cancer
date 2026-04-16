@@ -265,13 +265,23 @@ export default function App() {
   async function handleUpload(file) {
     setStatus({ type: 'loading', msg: 'Uploading...' })
     setMeasurements(null); setPennyData(null); setClassification(null); setCropImageDataUrl(null)
-    const fd = new FormData(); fd.append('image', file)
-    // Create local object URL for immediate display (works on Vercel where /uploads isn't served)
+    // Create local object URL for display + read base64 for API calls
     const localUrl = URL.createObjectURL(file)
     try {
-      const r = await fetch(`${API}/api/upload`, { method: 'POST', body: fd })
-      const d = await r.json(); if (d.error) throw new Error(d.error)
-      setImage({ filename: d.filename, width: d.width, height: d.height, url: localUrl })
+      // Read file as base64 for sending to Roboflow directly
+      const b64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result.split(',')[1])
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+      // Get image dimensions
+      const dims = await new Promise((resolve) => {
+        const img = new window.Image()
+        img.onload = () => resolve({ width: img.width, height: img.height })
+        img.src = localUrl
+      })
+      setImage({ filename: file.name, width: dims.width, height: dims.height, url: localUrl, base64: b64 })
       setStatus({ type: 'success', msg: 'Image loaded. Paint over the mole, then click Detect.' })
     } catch (e) { setStatus({ type: 'error', msg: e.message }) }
   }
@@ -312,10 +322,10 @@ export default function App() {
     setStatus({ type: 'loading', msg: 'Running Roboflow penny detection...' })
     setMeasurements(null); setClassification(null); setCropImageDataUrl(null)
     try {
-      // Step 1: Detect penny
+      // Step 1: Detect penny (send base64 directly — no /tmp file dependency)
       const r1 = await fetch(`${API}/api/detect-penny`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_path: image.filename }),
+        body: JSON.stringify({ image_base64: image.base64 }),
       })
       const d1 = await r1.json(); if (d1.error) throw new Error(d1.error)
       const pennyArea = extractPennyArea(d1.result)

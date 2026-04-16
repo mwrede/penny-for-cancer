@@ -1,12 +1,10 @@
-"""Vercel serverless function: POST /api/detect-penny — run Roboflow penny detection via HTTP API."""
-import os
+"""Vercel serverless function: POST /api/detect-penny — run Roboflow penny detection via HTTP API.
+Accepts base64 image directly from frontend (no /tmp file dependency)."""
 import json
-import base64
 import urllib.request
 import urllib.error
 from http.server import BaseHTTPRequestHandler
 
-UPLOAD_DIR = "/tmp/uploads"
 API_KEY = "jIlsPhHeCYPv0LCOooQT"
 WORKSPACE = "michael-h89ju"
 WORKFLOW_ID = "penny-area-measurement-pipeline-1776292482637"
@@ -16,27 +14,18 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         length = int(self.headers.get("Content-Length", 0))
         data = json.loads(self.rfile.read(length))
-        filename = data.get("image_path")
-        if not filename:
-            self._json(400, {"error": "No image_path"})
-            return
-
-        full = os.path.join(UPLOAD_DIR, filename)
-        if not os.path.exists(full):
-            self._json(404, {"error": "Not found"})
+        image_b64 = data.get("image_base64")
+        if not image_b64:
+            self._json(400, {"error": "No image data"})
             return
 
         try:
-            # Read image and encode as base64
-            with open(full, "rb") as f:
-                img_b64 = base64.b64encode(f.read()).decode("utf-8")
-
-            # Call Roboflow workflow API directly
+            # Call Roboflow workflow API directly with base64 image
             url = f"https://serverless.roboflow.com/{WORKSPACE}/workflows/{WORKFLOW_ID}"
             payload = json.dumps({
                 "api_key": API_KEY,
                 "inputs": {
-                    "image": {"type": "base64", "value": img_b64}
+                    "image": {"type": "base64", "value": image_b64}
                 }
             }).encode("utf-8")
 

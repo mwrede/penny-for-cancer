@@ -58,17 +58,21 @@ def serve_upload(filename):
 @app.route("/api/detect-penny", methods=["POST"])
 def detect_penny():
     data = request.get_json()
-    filename = data.get("image_path")
-    if not filename:
-        return jsonify({"error": "No image_path"}), 400
-    full = os.path.join(UPLOAD_DIR, filename)
-    if not os.path.exists(full):
-        return jsonify({"error": "Not found"}), 404
+    image_b64 = data.get("image_base64")
+    if not image_b64:
+        return jsonify({"error": "No image data"}), 400
+    # Save base64 to temp file for SDK
+    import base64
+    img_bytes = base64.b64decode(image_b64)
+    temp_name = f"penny_{uuid.uuid4().hex[:8]}.jpg"
+    temp_path = os.path.join(UPLOAD_DIR, temp_name)
+    with open(temp_path, "wb") as f:
+        f.write(img_bytes)
     try:
         result = client.run_workflow(
             workspace_name="michael-h89ju",
             workflow_id="penny-area-measurement-pipeline-1776292482637",
-            images={"image": full},
+            images={"image": temp_path},
             use_cache=True,
         )
         print("=== ROBOFLOW RESPONSE ===")
