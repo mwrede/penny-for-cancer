@@ -1105,62 +1105,43 @@ function extractPennyArea(result) {
 
   console.log('extractPennyArea items:', JSON.stringify(items, null, 2))
 
-  // Deep search for area_values in the response
-  function findAreaValues(obj) {
-    if (!obj || typeof obj !== 'object') return null
-    if (Array.isArray(obj)) {
-      for (const item of obj) {
-        const found = findAreaValues(item)
-        if (found) return found
-      }
-      return null
-    }
-    // Check this object's keys
-    if (obj.area_values && Array.isArray(obj.area_values) && obj.area_values.length > 0) {
-      return obj.area_values
-    }
-    for (const key of Object.keys(obj)) {
-      if (key === 'area_values' && Array.isArray(obj[key]) && obj[key].length > 0) return obj[key]
-      const found = findAreaValues(obj[key])
-      if (found) return found
-    }
-    return null
-  }
-
-  const areaValues = findAreaValues(items)
-  if (areaValues) {
-    console.log('area_values found:', areaValues)
-    const area = Math.min(...areaValues)
-
-    // Try to find bbox for overlay
-    let bbox = null
-    function findBbox(obj) {
-      if (!obj || typeof obj !== 'object') return
-      if (Array.isArray(obj)) { obj.forEach(findBbox); return }
-      if (obj.predictions && Array.isArray(obj.predictions)) {
-        for (const p of obj.predictions) {
-          if (p.width && p.height) { bbox = { x: p.x, y: p.y, width: p.width, height: p.height, confidence: p.confidence || 0.9 }; return }
-        }
-      }
-      if (obj.width && obj.height && obj.x !== undefined && obj.y !== undefined && obj.confidence !== undefined) {
-        bbox = { x: obj.x, y: obj.y, width: obj.width, height: obj.height, confidence: obj.confidence }
-        return
-      }
-      Object.values(obj).forEach(findBbox)
-    }
-    findBbox(items)
-    return { area, bbox }
-  }
-
-  // Fallback: look for any key containing 'area' with numeric array
   for (const item of items) {
     if (!item || typeof item !== 'object') continue
+    const areaValues = item.area_values
+    if (!Array.isArray(areaValues) || areaValues.length === 0) continue
+
+    // Get predictions array — area_values[i] corresponds to predictions[i]
+    let predictions = null
     for (const key of Object.keys(item)) {
       const val = item[key]
-      if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'number' && key.toLowerCase().includes('area')) {
-        return { area: Math.min(...val), bbox: null }
+      if (val && typeof val === 'object' && !Array.isArray(val) && val.predictions) {
+        predictions = val.predictions
+        break
       }
     }
+
+    console.log('area_values:', areaValues)
+    console.log('predictions count:', predictions ? predictions.length : 0)
+
+    if (predictions && Array.isArray(predictions) && predictions.length > 0) {
+      // Pick the penny with the HIGHEST confidence — that's the real penny
+      let bestIdx = 0
+      let bestConf = predictions[0].confidence || 0
+      for (let i = 1; i < predictions.length; i++) {
+        const conf = predictions[i].confidence || 0
+        if (conf > bestConf) { bestConf = conf; bestIdx = i }
+      }
+      // Use the area that corresponds to the best prediction
+      const area = areaValues[bestIdx] !== undefined ? areaValues[bestIdx] : areaValues[0]
+      const p = predictions[bestIdx]
+      const bbox = { x: p.x, y: p.y, width: p.width, height: p.height, confidence: p.confidence || 0.9 }
+
+      console.log(`Picked prediction[${bestIdx}] with confidence ${bestConf}, area=${area}`)
+      return { area, bbox }
+    }
+
+    // No predictions — just pick the first area value (single detection)
+    return { area: areaValues[0], bbox: null }
   }
   return null
 }
