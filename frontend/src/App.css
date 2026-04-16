@@ -395,10 +395,12 @@ body {
   display: flex; gap: 12px; align-items: center; margin-bottom: 8px;
 }
 .name-avatar-preview {
-  flex-shrink: 0; background: #1a1a2e; border-radius: 12px; padding: 4px;
+  flex-shrink: 0; background: #1a1a2e; border-radius: 50%; padding: 3px;
   border: 2px solid #2a2a4a; transition: border-color 0.3s;
+  overflow: hidden;
 }
 .name-avatar-preview:hover { border-color: #f9a825; }
+.mole-avatar { overflow: hidden; border-radius: 50%; }
 .name-input-area { flex: 1; }
 .name-buttons {
   display: flex; gap: 6px; margin-bottom: 8px;

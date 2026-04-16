@@ -39,138 +39,48 @@ const FUN_NAMES = [
 ]
 
 // ═════════════════════════════════════════════════════════════
-// CUTE MOLE AVATAR — procedural SVG creature from name
+// CUTE MOLE AVATAR — AI-generated cartoon from Pollinations.ai
+// Falls back to DiceBear while loading
 // ═════════════════════════════════════════════════════════════
 function MoleAvatar({ name, size = 48 }) {
-  const avatar = useMemo(() => {
-    const n = (name || 'Mole').trim()
-    let h = 0
-    for (let i = 0; i < n.length; i++) h = ((h << 5) - h + n.charCodeAt(i)) | 0
-    const a = Math.abs(h)
+  const [loaded, setLoaded] = useState(false)
+  const [error, setError] = useState(false)
+  const n = (name || 'Mole').trim()
 
-    const palettes = [
-      ['#FF6B6B','#FF8E8E'], ['#4ECDC4','#7EDDD6'], ['#45B7D1','#74CBE0'],
-      ['#96CEB4','#B5DFCC'], ['#FFEAA7','#FFF2CC'], ['#DDA0DD','#EBC4EB'],
-      ['#98D8C8','#B8E8DC'], ['#F7DC6F','#FAE99D'], ['#BB8FCE','#D4B5E0'],
-      ['#85C1E9','#AAD4F0'], ['#F1948A','#F6B5AE'], ['#82E0AA','#A8ECC5'],
-      ['#F0B27A','#F5CCA4'], ['#AED6F1','#CEEAF8'], ['#D7BDE2','#E8D5F0'],
-    ]
-    const [bodyColor, bodyLight] = palettes[a % palettes.length]
-    const eyeStyle = a % 5    // round, happy, wink, star, heart
-    const mouthStyle = a % 4  // smile, grin, tongue, o
-    const accessory = a % 8   // none, hat, bow, crown, glasses, flower, bandana, none
-    const hasBlush = a % 3 !== 2
-    const hasFeet = a % 2 === 0
-    const earStyle = a % 3     // round, pointy, none
-    const bodyShape = a % 3    // circle, blob, square-ish
+  // AI-generated cartoon URL from Pollinations (free, no auth)
+  const aiUrl = useMemo(() => {
+    const prompt = `cute kawaii cartoon mascot character named ${n}, chibi style, simple, colorful, round, adorable, white background, sticker art`
+    return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=256&height=256&nologo=true&seed=${n.length * 7}`
+  }, [n])
 
-    return { bodyColor, bodyLight, eyeStyle, mouthStyle, accessory, hasBlush, hasFeet, earStyle, bodyShape }
-  }, [name])
-
-  const { bodyColor, bodyLight, eyeStyle, mouthStyle, accessory, hasBlush, hasFeet, earStyle, bodyShape } = avatar
+  // DiceBear instant fallback
+  const fallbackUrl = `https://api.dicebear.com/9.x/fun-emoji/svg?seed=${encodeURIComponent(n)}&size=${size * 2}`
 
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" style={{ flexShrink: 0 }}>
-      {/* Ears */}
-      {earStyle === 0 && <>
-        <circle cx="22" cy="28" r="12" fill={bodyColor} />
-        <circle cx="78" cy="28" r="12" fill={bodyColor} />
-        <circle cx="22" cy="28" r="7" fill={bodyLight} />
-        <circle cx="78" cy="28" r="7" fill={bodyLight} />
-      </>}
-      {earStyle === 1 && <>
-        <polygon points="20,15 30,35 10,35" fill={bodyColor} />
-        <polygon points="80,15 90,35 70,35" fill={bodyColor} />
-      </>}
-
-      {/* Body */}
-      {bodyShape === 0 && <circle cx="50" cy="55" r="32" fill={bodyColor} />}
-      {bodyShape === 1 && <ellipse cx="50" cy="55" rx="34" ry="30" fill={bodyColor} />}
-      {bodyShape === 2 && <rect x="20" y="27" width="60" height="56" rx="18" fill={bodyColor} />}
-
-      {/* Belly */}
-      <ellipse cx="50" cy="60" rx="18" ry="16" fill={bodyLight} opacity="0.5" />
-
-      {/* Feet */}
-      {hasFeet && <>
-        <ellipse cx="36" cy="86" rx="10" ry="6" fill={bodyColor} />
-        <ellipse cx="64" cy="86" rx="10" ry="6" fill={bodyColor} />
-      </>}
-
-      {/* Arms */}
-      <ellipse cx="19" cy="58" rx="7" ry="5" fill={bodyColor} transform="rotate(-20 19 58)" />
-      <ellipse cx="81" cy="58" rx="7" ry="5" fill={bodyColor} transform="rotate(20 81 58)" />
-
-      {/* Eyes */}
-      {eyeStyle === 0 && <>
-        <circle cx="39" cy="48" r="6" fill="white" /><circle cx="39" cy="48" r="3.5" fill="#333" /><circle cx="40.5" cy="46.5" r="1.2" fill="white" />
-        <circle cx="61" cy="48" r="6" fill="white" /><circle cx="61" cy="48" r="3.5" fill="#333" /><circle cx="62.5" cy="46.5" r="1.2" fill="white" />
-      </>}
-      {eyeStyle === 1 && <>
-        <path d="M33 48 Q39 42 45 48" fill="none" stroke="#333" strokeWidth="2.5" strokeLinecap="round" />
-        <path d="M55 48 Q61 42 67 48" fill="none" stroke="#333" strokeWidth="2.5" strokeLinecap="round" />
-      </>}
-      {eyeStyle === 2 && <>
-        <circle cx="39" cy="48" r="6" fill="white" /><circle cx="39" cy="48" r="3.5" fill="#333" /><circle cx="40.5" cy="46.5" r="1.2" fill="white" />
-        <path d="M55 48 Q61 42 67 48" fill="none" stroke="#333" strokeWidth="2.5" strokeLinecap="round" />
-      </>}
-      {eyeStyle === 3 && <>
-        <text x="39" y="52" textAnchor="middle" fontSize="14" fill="#333">★</text>
-        <text x="61" y="52" textAnchor="middle" fontSize="14" fill="#333">★</text>
-      </>}
-      {eyeStyle === 4 && <>
-        <text x="39" y="52" textAnchor="middle" fontSize="13" fill="#e91e63">♥</text>
-        <text x="61" y="52" textAnchor="middle" fontSize="13" fill="#e91e63">♥</text>
-      </>}
-
-      {/* Blush */}
-      {hasBlush && <>
-        <circle cx="30" cy="58" r="5" fill="#FFB6C1" opacity="0.5" />
-        <circle cx="70" cy="58" r="5" fill="#FFB6C1" opacity="0.5" />
-      </>}
-
-      {/* Mouth */}
-      {mouthStyle === 0 && <path d="M42 63 Q50 72 58 63" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" />}
-      {mouthStyle === 1 && <path d="M40 63 Q50 74 60 63" fill="#333" />}
-      {mouthStyle === 2 && <>
-        <path d="M42 63 Q50 72 58 63" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" />
-        <ellipse cx="50" cy="70" rx="4" ry="3" fill="#FF6B6B" />
-      </>}
-      {mouthStyle === 3 && <circle cx="50" cy="65" r="4" fill="#333" />}
-
-      {/* Accessories */}
-      {accessory === 1 && <>
-        <ellipse cx="50" cy="22" rx="20" ry="6" fill="#333" />
-        <rect x="38" y="8" width="24" height="16" rx="4" fill="#333" />
-        <rect x="42" y="18" width="16" height="4" rx="2" fill="#f9a825" />
-      </>}
-      {accessory === 2 && <>
-        <circle cx="35" cy="28" r="5" fill="#FF69B4" />
-        <circle cx="28" cy="25" r="4" fill="#FF69B4" />
-        <circle cx="32" cy="22" r="4" fill="#FF69B4" />
-      </>}
-      {accessory === 3 && <>
-        <polygon points="50,8 42,24 58,24" fill="#FFD700" />
-        <polygon points="42,8 34,22 50,22" fill="#FFD700" />
-        <polygon points="58,8 50,22 66,22" fill="#FFD700" />
-        <circle cx="42" cy="20" r="2" fill="#FF6B6B" />
-        <circle cx="50" cy="16" r="2" fill="#4FC3F7" />
-        <circle cx="58" cy="20" r="2" fill="#66BB6A" />
-      </>}
-      {accessory === 4 && <>
-        <circle cx="39" cy="48" r="9" fill="none" stroke="#333" strokeWidth="2" />
-        <circle cx="61" cy="48" r="9" fill="none" stroke="#333" strokeWidth="2" />
-        <line x1="48" y1="48" x2="52" y2="48" stroke="#333" strokeWidth="2" />
-      </>}
-      {accessory === 5 && <>
-        <circle cx="72" cy="30" r="6" fill="#FF69B4" />
-        <circle cx="72" cy="30" r="3" fill="#FFD700" />
-        <ellipse cx="68" cy="36" rx="3" ry="5" fill="#66BB6A" />
-      </>}
-      {accessory === 6 && <>
-        <path d="M25 32 Q50 20 75 32" fill={bodyColor} stroke="#f9a825" strokeWidth="2" strokeDasharray="3 2" />
-      </>}
-    </svg>
+    <div className="mole-avatar" style={{ width: size, height: size, flexShrink: 0, position: 'relative' }}>
+      {/* DiceBear shown while AI image loads */}
+      {!loaded && (
+        <img
+          src={fallbackUrl}
+          alt={n}
+          style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', position: 'absolute', top: 0, left: 0 }}
+        />
+      )}
+      {/* AI-generated image */}
+      {!error && (
+        <img
+          src={aiUrl}
+          alt={n}
+          onLoad={() => setLoaded(true)}
+          onError={() => setError(true)}
+          style={{
+            width: size, height: size, borderRadius: '50%', objectFit: 'cover',
+            opacity: loaded ? 1 : 0, transition: 'opacity 0.3s',
+            position: loaded ? 'relative' : 'absolute', top: 0, left: 0
+          }}
+        />
+      )}
+    </div>
   )
 }
 
@@ -1009,7 +919,7 @@ function MoleForm({ onDetect, onSave, status, measurements, classification, crop
           <div className="name-picker">
             {FUN_NAMES.map(n => (
               <button key={n} className={`name-chip ${name === n ? 'active' : ''}`} onClick={() => { setName(n); setShowNamePicker(false) }}>
-                <MoleAvatar name={n} size={24} /> {n}
+                <img src={`https://api.dicebear.com/9.x/fun-emoji/svg?seed=${encodeURIComponent(n)}&size=48`} alt="" style={{ width: 24, height: 24, borderRadius: '50%' }} /> {n}
               </button>
             ))}
           </div>
