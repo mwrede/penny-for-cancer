@@ -328,8 +328,9 @@ export default function App() {
         body: JSON.stringify({ image_base64: image.base64 }),
       })
       const d1 = await r1.json(); if (d1.error) throw new Error(d1.error)
+      console.log('=== FULL DETECT RESPONSE ===', JSON.stringify(d1, null, 2))
       const pennyArea = extractPennyArea(d1.result)
-      if (!pennyArea) throw new Error('No penny detected. Make sure a penny is visible in the photo.')
+      if (!pennyArea) throw new Error('No penny detected — check console for raw API response. Make sure a penny is visible in the photo.')
       setPennyData(pennyArea)
 
       // Step 2: Calculate measurements
@@ -1027,26 +1028,69 @@ function MoleForm({ onDetect, onSave, status, measurements, classification, crop
 // HELPERS
 // ═════════════════════════════════════════════════════════════
 function extractPennyArea(result) {
-  if (!result || !Array.isArray(result)) return null
-  for (const item of result) {
-    console.log('Roboflow item:', JSON.stringify(item, null, 2))
-    if (item.area_values && Array.isArray(item.area_values) && item.area_values.length > 0) {
-      console.log('area_values found:', item.area_values)
-      const area = Math.min(...item.area_values)
-      let bbox = null
-      for (const key of Object.keys(item)) {
-        const val = item[key]
-        if (val && typeof val === 'object') {
-          const preds = val.predictions || (Array.isArray(val) ? val : null)
-          if (Array.isArray(preds)) { for (const p of preds) { if (p.width && p.height) { bbox = { x: p.x, y: p.y, width: p.width, height: p.height, confidence: p.confidence || 0.9 }; break } } }
-        }
-        if (bbox) break
+  // Handle various response formats: direct array, {outputs: [...]}, or single object
+  let items = result
+  if (result && !Array.isArray(result) && result.outputs) items = result.outputs
+  if (!items) return null
+  if (!Array.isArray(items)) items = [items]
+
+  console.log('extractPennyArea items:', JSON.stringify(items, null, 2))
+
+  // Deep search for area_values in the response
+  function findAreaValues(obj) {
+    if (!obj || typeof obj !== 'object') return null
+    if (Array.isArray(obj)) {
+      for (const item of obj) {
+        const found = findAreaValues(item)
+        if (found) return found
       }
-      return { area, bbox }
+      return null
     }
+    // Check this object's keys
+    if (obj.area_values && Array.isArray(obj.area_values) && obj.area_values.length > 0) {
+      return obj.area_values
+    }
+    for (const key of Object.keys(obj)) {
+      if (key === 'area_values' && Array.isArray(obj[key]) && obj[key].length > 0) return obj[key]
+      const found = findAreaValues(obj[key])
+      if (found) return found
+    }
+    return null
+  }
+
+  const areaValues = findAreaValues(items)
+  if (areaValues) {
+    console.log('area_values found:', areaValues)
+    const area = Math.min(...areaValues)
+
+    // Try to find bbox for overlay
+    let bbox = null
+    function findBbox(obj) {
+      if (!obj || typeof obj !== 'object') return
+      if (Array.isArray(obj)) { obj.forEach(findBbox); return }
+      if (obj.predictions && Array.isArray(obj.predictions)) {
+        for (const p of obj.predictions) {
+          if (p.width && p.height) { bbox = { x: p.x, y: p.y, width: p.width, height: p.height, confidence: p.confidence || 0.9 }; return }
+        }
+      }
+      if (obj.width && obj.height && obj.x !== undefined && obj.y !== undefined && obj.confidence !== undefined) {
+        bbox = { x: obj.x, y: obj.y, width: obj.width, height: obj.height, confidence: obj.confidence }
+        return
+      }
+      Object.values(obj).forEach(findBbox)
+    }
+    findBbox(items)
+    return { area, bbox }
+  }
+
+  // Fallback: look for any key containing 'area' with numeric array
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue
     for (const key of Object.keys(item)) {
       const val = item[key]
-      if (Array.isArray(val) && val.length > 0 && key.includes('area')) return { area: Math.max(...val), bbox: null }
+      if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'number' && key.toLowerCase().includes('area')) {
+        return { area: Math.min(...val), bbox: null }
+      }
     }
   }
   return null
