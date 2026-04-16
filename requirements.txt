@@ -1,0 +1,2 @@
+inference-sdk>=1.0.0
+Pillow>=11.0.0

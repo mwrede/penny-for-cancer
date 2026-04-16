@@ -91,7 +91,7 @@ export default function App() {
   }
 
   async function handleDelete(id) {
-    await fetch(`${API}/api/moles/${id}`, { method: 'DELETE' }); loadHistory()
+    await fetch(`${API}/api/moles?id=${id}`, { method: 'DELETE' }); loadHistory()
   }
 
   async function handleClassify() {

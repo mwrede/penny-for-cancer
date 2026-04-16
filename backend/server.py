@@ -210,10 +210,12 @@ def save_mole():
     return jsonify(record)
 
 
-@app.route("/api/moles/<mole_id>", methods=["DELETE"])
-def delete_mole(mole_id):
-    moles = [m for m in load_moles() if m["id"] != mole_id]
-    save_moles_db(moles)
+@app.route("/api/moles", methods=["DELETE"])
+def delete_mole():
+    mole_id = request.args.get("id")
+    if mole_id:
+        moles = [m for m in load_moles() if m["id"] != mole_id]
+        save_moles_db(moles)
     return jsonify({"ok": True})
 
 
