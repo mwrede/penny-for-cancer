@@ -94,7 +94,7 @@ function ShareButton({ measurements, classification, name }) {
   function buildMessage() {
     const ms = measurements || {}
     const lines = [
-      `🪙 Penny for Cancer — Mole Report`,
+      `🪙 A Penny For Cancer — Mole Report`,
       `━━━━━━━━━━━━━━━━━━━━━━`,
       `Mole: ${name || 'Unnamed'}`,
       ms.mole_diameter_mm ? `Diameter: ${ms.mole_diameter_mm} mm` : '',
@@ -116,10 +116,10 @@ function ShareButton({ measurements, classification, name }) {
     const msg = buildMessage()
     if (method === 'native' && navigator.share) {
       try {
-        await navigator.share({ title: 'Penny for Cancer — Mole Report', text: msg })
+        await navigator.share({ title: 'A Penny For Cancer — Mole Report', text: msg })
       } catch {}
     } else if (method === 'email') {
-      const subject = encodeURIComponent('Penny for Cancer — Mole Report')
+      const subject = encodeURIComponent('A Penny For Cancer — Mole Report')
       const body = encodeURIComponent(msg)
       window.open(`mailto:?subject=${subject}&body=${body}`)
     } else if (method === 'copy') {
@@ -352,7 +352,7 @@ export default function App() {
     <div className="app">
       <header className="app-header" onClick={goHome} style={{ cursor: 'pointer' }}>
         <img src="/penny.png" alt="Penny" className="header-penny" />
-        <h1>Penny <span>for Cancer</span></h1>
+        <h1>A Penny <span>For Cancer</span></h1>
         <p className="header-tagline">Measure moles using a penny for scale</p>
       </header>
 
@@ -434,7 +434,7 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
         <div className="hero-icon">
           <img src="/penny.png" alt="Penny" className="hero-penny" />
         </div>
-        <h2>Welcome to Penny for Cancer</h2>
+        <h2>Welcome to A Penny For Cancer</h2>
         <p className="hero-subtitle">
           A free tool to help you measure and monitor moles on your skin using nothing more than a photo and a US penny.
           Early detection saves lives &mdash; track your moles, spot changes, and know when to see a dermatologist.
@@ -530,7 +530,7 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
           <div className="abcde-card">
             <div className="abcde-letter">D</div>
             <h4>Diameter</h4>
-            <p>The mole is larger than 6mm (about the size of a pencil eraser). <strong>This is exactly what Penny for Cancer measures.</strong></p>
+            <p>The mole is larger than 6mm (about the size of a pencil eraser). <strong>This is exactly what A Penny For Cancer measures.</strong></p>
           </div>
           <div className="abcde-card">
             <div className="abcde-letter">E</div>
@@ -551,7 +551,7 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
             Yet early detection changes everything. When caught early, the 5-year survival rate for melanoma is <strong>99%</strong>. The problem is most people don't monitor their moles regularly, and when they do, they have no objective way to measure changes.
           </p>
           <p>
-            <strong>Penny for Cancer</strong> solves this with something everyone has: a penny. By placing a penny next to a mole and taking a photo, our AI-powered tool can calculate the exact size of the mole in millimeters, compare it against 2,000+ dermoscopic samples from the Stanford MIDAS database, and track changes over time &mdash; flagging any mole that grows more than 20%.
+            <strong>A Penny For Cancer</strong> solves this with something everyone has: a penny. By placing a penny next to a mole and taking a photo, our AI-powered tool can calculate the exact size of the mole in millimeters, compare it against 2,000+ dermoscopic samples from the Stanford MIDAS database, and track changes over time &mdash; flagging any mole that grows more than 20%.
           </p>
           <p>
             This is not a replacement for professional medical advice. It's a tool to help you be proactive about your skin health and know when it's time to see a dermatologist.
