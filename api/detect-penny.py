@@ -1,15 +1,15 @@
-"""Vercel serverless function: POST /api/detect-penny — run Roboflow penny detection."""
+"""Vercel serverless function: POST /api/detect-penny — run Roboflow penny detection via HTTP API."""
 import os
 import json
+import base64
+import urllib.request
+import urllib.error
 from http.server import BaseHTTPRequestHandler
-from inference_sdk import InferenceHTTPClient
 
 UPLOAD_DIR = "/tmp/uploads"
-
-client = InferenceHTTPClient(
-    api_url="https://serverless.roboflow.com",
-    api_key="jIlsPhHeCYPv0LCOooQT",
-)
+API_KEY = "jIlsPhHeCYPv0LCOooQT"
+WORKSPACE = "michael-h89ju"
+WORKFLOW_ID = "penny-area-measurement-pipeline-1776292482637"
 
 
 class handler(BaseHTTPRequestHandler):
@@ -27,13 +27,34 @@ class handler(BaseHTTPRequestHandler):
             return
 
         try:
-            result = client.run_workflow(
-                workspace_name="michael-h89ju",
-                workflow_id="penny-area-measurement-pipeline-1776292482637",
-                images={"image": full},
-                use_cache=True,
+            # Read image and encode as base64
+            with open(full, "rb") as f:
+                img_b64 = base64.b64encode(f.read()).decode("utf-8")
+
+            # Call Roboflow workflow API directly
+            url = f"https://serverless.roboflow.com/{WORKSPACE}/workflows/{WORKFLOW_ID}"
+            payload = json.dumps({
+                "api_key": API_KEY,
+                "inputs": {
+                    "image": {"type": "base64", "value": img_b64}
+                }
+            }).encode("utf-8")
+
+            req = urllib.request.Request(
+                url,
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
             )
-            self._json(200, {"result": result})
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+
+            # The workflow API returns {"outputs": [...]}
+            outputs = result.get("outputs", result)
+            self._json(200, {"result": outputs})
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            self._json(500, {"error": f"Roboflow API error {e.code}: {body}"})
         except Exception as e:
             self._json(500, {"error": str(e)})
 

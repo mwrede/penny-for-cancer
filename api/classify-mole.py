@@ -1,24 +1,32 @@
-"""Vercel serverless function: POST /api/classify-mole — AI classification against MIDAS."""
+"""Vercel serverless function: POST /api/classify-mole — AI classification via Roboflow HTTP API."""
 import os
 import json
 import uuid
 import base64
+import urllib.request
+import urllib.error
 from http.server import BaseHTTPRequestHandler
-from inference_sdk import InferenceHTTPClient
 
 UPLOAD_DIR = "/tmp/uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-client = InferenceHTTPClient(
-    api_url="https://serverless.roboflow.com",
-    api_key="jIlsPhHeCYPv0LCOooQT",
-)
+API_KEY = "jIlsPhHeCYPv0LCOooQT"
+WORKSPACE = "michael-h89ju"
+WORKFLOW_ID = "custom-workflow-11"
 
 
 def parse_classification(result):
-    if not result or not isinstance(result, list):
+    """Extract yes/no label and confidence from workflow response."""
+    # Handle both {"outputs": [...]} and direct list formats
+    items = result
+    if isinstance(result, dict) and "outputs" in result:
+        items = result["outputs"]
+    if not items or not isinstance(items, list):
         return {"label": "unknown", "confidence": 0}
-    for item in result:
+
+    for item in items:
+        if not isinstance(item, dict):
+            continue
         for key, val in item.items():
             if isinstance(val, dict):
                 if "class" in val:
@@ -48,22 +56,32 @@ class handler(BaseHTTPRequestHandler):
             self._json(400, {"error": "No image data"})
             return
 
-        img_bytes = base64.b64decode(image_b64)
-        crop_name = f"crop_{uuid.uuid4().hex[:8]}.jpg"
-        crop_path = os.path.join(UPLOAD_DIR, crop_name)
-        with open(crop_path, "wb") as f:
-            f.write(img_bytes)
-
         try:
-            result = client.run_workflow(
-                workspace_name="michael-h89ju",
-                workflow_id="custom-workflow-11",
-                images={"image": crop_path},
-                use_cache=True,
+            # Call Roboflow workflow API directly with base64 image
+            url = f"https://serverless.roboflow.com/{WORKSPACE}/workflows/{WORKFLOW_ID}"
+            payload = json.dumps({
+                "api_key": API_KEY,
+                "inputs": {
+                    "image": {"type": "base64", "value": image_b64}
+                }
+            }).encode("utf-8")
+
+            req = urllib.request.Request(
+                url,
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
             )
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                result = json.loads(resp.read().decode("utf-8"))
+
             prediction = parse_classification(result)
+            crop_name = f"crop_{uuid.uuid4().hex[:8]}.jpg"
             prediction["crop_filename"] = crop_name
             self._json(200, prediction)
+        except urllib.error.HTTPError as e:
+            body = e.read().decode("utf-8", errors="replace")
+            self._json(500, {"error": f"Roboflow API error {e.code}: {body}"})
         except Exception as e:
             self._json(500, {"error": str(e)})
 
