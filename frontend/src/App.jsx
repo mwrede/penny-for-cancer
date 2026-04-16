@@ -4,6 +4,30 @@ import './App.css'
 const API = ''
 const PaintContext = createContext()
 
+// Roboflow config — calls made directly from browser to avoid Cloudflare blocking serverless IPs
+const RF_API_KEY = 'jIlsPhHeCYPv0LCOooQT'
+const RF_WORKSPACE = 'michael-h89ju'
+const RF_PENNY_WORKFLOW = 'penny-area-measurement-pipeline-1776292482637'
+const RF_CLASSIFY_WORKFLOW = 'custom-workflow-11'
+
+async function callRoboflowWorkflow(workflowId, imageBase64) {
+  const url = `https://serverless.roboflow.com/${RF_WORKSPACE}/workflows/${workflowId}`
+  const resp = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      api_key: RF_API_KEY,
+      inputs: { image: { type: 'base64', value: imageBase64 } }
+    })
+  })
+  if (!resp.ok) {
+    const text = await resp.text()
+    throw new Error(`Roboflow error ${resp.status}: ${text}`)
+  }
+  const data = await resp.json()
+  return data.outputs || data
+}
+
 const FUN_NAMES = [
   'Spotty McSpotface', 'Sir Dots-a-Lot', 'Princess Freckle', 'Captain Speckle',
   'Dotty McDotface', 'Mole-y Cyrus', 'Spot Light', 'Freckle Freddy',
@@ -331,39 +355,43 @@ export default function App() {
     setStatus({ type: 'loading', msg: 'Running Roboflow penny detection...' })
     setMeasurements(null); setClassification(null); setCropImageDataUrl(null)
     try {
-      // Step 1: Detect penny (send base64 directly — no /tmp file dependency)
-      const r1 = await fetch(`${API}/api/detect-penny`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_base64: image.base64 }),
-      })
-      const d1 = await r1.json(); if (d1.error) throw new Error(d1.error)
-      console.log('=== FULL DETECT RESPONSE ===', JSON.stringify(d1, null, 2))
-      const pennyArea = extractPennyArea(d1.result)
+      // Step 1: Detect penny — call Roboflow directly from browser (avoids Cloudflare blocking serverless IPs)
+      const pennyResult = await callRoboflowWorkflow(RF_PENNY_WORKFLOW, image.base64)
+      console.log('=== PENNY DETECT RESPONSE ===', JSON.stringify(pennyResult, null, 2))
+      const pennyArea = extractPennyArea(pennyResult)
       if (!pennyArea) throw new Error('No penny detected — check console for raw API response. Make sure a penny is visible in the photo.')
       setPennyData(pennyArea)
 
-      // Step 2: Calculate measurements
-      const r2 = await fetch(`${API}/api/calculate`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mask_pixel_count: count, penny_pixel_area: pennyArea.area }),
-      })
-      const d2 = await r2.json(); if (d2.error) throw new Error(d2.error)
-      setMeasurements(d2)
+      // Step 2: Calculate measurements (simple math — can do client-side too, but keep backend for consistency)
+      const PENNY_AREA_SQ_IN = 0.448
+      const sqInPerPx = PENNY_AREA_SQ_IN / pennyArea.area
+      const moleAreaIn = count * sqInPerPx
+      const moleAreaMm = moleAreaIn * 645.16
+      const moleDiamIn = 2 * Math.sqrt(moleAreaIn / Math.PI)
+      const moleDiamMm = moleDiamIn * 25.4
+      const calcResult = {
+        penny_pixel_area: Math.round(pennyArea.area * 10) / 10,
+        mole_pixel_count: count,
+        mole_area_sq_inches: Math.round(moleAreaIn * 10000) / 10000,
+        mole_area_sq_mm: Math.round(moleAreaMm * 100) / 100,
+        mole_diameter_inches: Math.round(moleDiamIn * 10000) / 10000,
+        mole_diameter_mm: Math.round(moleDiamMm * 100) / 100,
+      }
+      setMeasurements(calcResult)
       setStatus({ type: 'loading', msg: 'Comparing against 2,000+ Stanford MIDAS samples...' })
 
-      // Step 3: Auto-run classification
+      // Step 3: Auto-run classification — also direct from browser
       const crop = cropMoleImage()
       if (crop) {
         setCropImageDataUrl(crop.dataUrl)
-        const r3 = await fetch(`${API}/api/classify-mole`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image_base64: crop.b64 }),
-        })
-        const d3 = await r3.json()
-        if (!d3.error) {
-          setClassification(d3)
+        try {
+          const clsResult = await callRoboflowWorkflow(RF_CLASSIFY_WORKFLOW, crop.b64)
+          console.log('=== CLASSIFY RESPONSE ===', JSON.stringify(clsResult, null, 2))
+          const prediction = parseClassification(clsResult)
+          setClassification(prediction)
           setStatus({ type: 'success', msg: 'Measurement & AI screening complete!' })
-        } else {
+        } catch (clsErr) {
+          console.warn('Classification failed:', clsErr)
           setStatus({ type: 'success', msg: 'Measurement complete. AI screening unavailable.' })
         }
       } else {
@@ -1036,6 +1064,38 @@ function MoleForm({ onDetect, onSave, status, measurements, classification, crop
 // ═════════════════════════════════════════════════════════════
 // HELPERS
 // ═════════════════════════════════════════════════════════════
+function parseClassification(result) {
+  // Parse classification response from Roboflow workflow (called from browser)
+  let items = result
+  if (result && !Array.isArray(result) && result.outputs) items = result.outputs
+  if (!items) return { label: 'unknown', confidence: 0 }
+  if (!Array.isArray(items)) items = [items]
+
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue
+    for (const [key, val] of Object.entries(item)) {
+      if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
+        if (val.class) return { label: val.class, confidence: Math.round((val.confidence || 0) * 1000) / 10 }
+        if (val.predictions) {
+          const preds = val.predictions
+          if (typeof preds === 'object' && !Array.isArray(preds)) {
+            const top = val.top || ''
+            const topConf = preds[top]?.confidence || 0
+            return { label: top, confidence: Math.round(topConf * 1000) / 10 }
+          }
+          if (Array.isArray(preds) && preds.length > 0) {
+            return { label: preds[0].class || 'unknown', confidence: Math.round((preds[0].confidence || 0) * 1000) / 10 }
+          }
+        }
+      }
+      if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'object' && val[0].class) {
+        return { label: val[0].class, confidence: Math.round((val[0].confidence || 0) * 1000) / 10 }
+      }
+    }
+  }
+  return { label: 'unknown', confidence: 0 }
+}
+
 function extractPennyArea(result) {
   // Handle various response formats: direct array, {outputs: [...]}, or single object
   let items = result
