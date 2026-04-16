@@ -266,10 +266,12 @@ export default function App() {
     setStatus({ type: 'loading', msg: 'Uploading...' })
     setMeasurements(null); setPennyData(null); setClassification(null); setCropImageDataUrl(null)
     const fd = new FormData(); fd.append('image', file)
+    // Create local object URL for immediate display (works on Vercel where /uploads isn't served)
+    const localUrl = URL.createObjectURL(file)
     try {
       const r = await fetch(`${API}/api/upload`, { method: 'POST', body: fd })
       const d = await r.json(); if (d.error) throw new Error(d.error)
-      setImage({ filename: d.filename, width: d.width, height: d.height, url: `${API}/uploads/${d.filename}` })
+      setImage({ filename: d.filename, width: d.width, height: d.height, url: localUrl })
       setStatus({ type: 'success', msg: 'Image loaded. Paint over the mole, then click Detect.' })
     } catch (e) { setStatus({ type: 'error', msg: e.message }) }
   }
@@ -384,9 +386,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header" onClick={goHome} style={{ cursor: 'pointer' }}>
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#f9a825" strokeWidth="2">
-          <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/>
-        </svg>
+        <img src="/penny.png" alt="Penny" className="header-penny" />
         <h1>Penny <span>for Cancer</span></h1>
         <p className="header-tagline">Measure moles using a penny for scale</p>
       </header>
@@ -433,9 +433,7 @@ export default function App() {
             <main className="canvas-area">
               {!image ? (
                 <div className="placeholder">
-                  <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="#f9a825" strokeWidth="1">
-                    <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/>
-                  </svg>
+                  <img src="/penny.png" alt="Penny" style={{ width: 72, height: 72, borderRadius: '50%' }} />
                   <h2>{selectedMole ? `Re-measuring: ${selectedMole.name}` : 'New Mole Analysis'}</h2>
                   <p>Upload or capture a photo with a penny placed next to the mole.</p>
                 </div>
@@ -469,9 +467,7 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
       {/* Hero */}
       <section className="home-hero">
         <div className="hero-icon">
-          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#f9a825" strokeWidth="1.5">
-            <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/>
-          </svg>
+          <img src="/penny.png" alt="Penny" className="hero-penny" />
         </div>
         <h2>Welcome to Penny for Cancer</h2>
         <p className="hero-subtitle">
