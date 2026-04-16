@@ -359,7 +359,7 @@ export default function App() {
       const pennyResult = await callRoboflowWorkflow(RF_PENNY_WORKFLOW, image.base64)
       console.log('=== PENNY DETECT RESPONSE ===', JSON.stringify(pennyResult, null, 2))
       const pennyArea = extractPennyArea(pennyResult)
-      if (!pennyArea) throw new Error('No penny detected — check console for raw API response. Make sure a penny is visible in the photo.')
+      if (!pennyArea) throw new Error('No penny detected. Raw response: ' + JSON.stringify(pennyResult).slice(0, 300))
       setPennyData(pennyArea)
 
       // Step 2: Calculate measurements (simple math — can do client-side too, but keep backend for consistency)
