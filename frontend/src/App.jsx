@@ -1,8 +1,224 @@
-import { useState, useRef, useEffect, createContext, useContext } from 'react'
+import { useState, useRef, useEffect, createContext, useContext, useMemo } from 'react'
 import './App.css'
 
 const API = ''
 const PaintContext = createContext()
+
+const FUN_NAMES = [
+  'Spotty McSpotface', 'Sir Dots-a-Lot', 'Princess Freckle', 'Captain Speckle',
+  'Dotty McDotface', 'Mole-y Cyrus', 'Spot Light', 'Freckle Freddy',
+  'Penny Lane', 'Dot Com', 'Spot Check', 'Lady Speckle',
+  'The Dot Father', 'Spot-ify', 'Dottie Parton', 'Mole-ana',
+  'Speck-tacular', 'Freckle Fern', 'Polka Dot', 'Cinnamon Spot',
+  'Cocoa Puff', 'Mocha Mark', 'Starry Spot', 'Pixel Pete',
+  'Button', 'Brownie Bite', 'Sunny Speck', 'Luna Dot',
+]
+
+// ═════════════════════════════════════════════════════════════
+// CUTE MOLE AVATAR — procedural SVG creature from name
+// ═════════════════════════════════════════════════════════════
+function MoleAvatar({ name, size = 48 }) {
+  const avatar = useMemo(() => {
+    const n = (name || 'Mole').trim()
+    let h = 0
+    for (let i = 0; i < n.length; i++) h = ((h << 5) - h + n.charCodeAt(i)) | 0
+    const a = Math.abs(h)
+
+    const palettes = [
+      ['#FF6B6B','#FF8E8E'], ['#4ECDC4','#7EDDD6'], ['#45B7D1','#74CBE0'],
+      ['#96CEB4','#B5DFCC'], ['#FFEAA7','#FFF2CC'], ['#DDA0DD','#EBC4EB'],
+      ['#98D8C8','#B8E8DC'], ['#F7DC6F','#FAE99D'], ['#BB8FCE','#D4B5E0'],
+      ['#85C1E9','#AAD4F0'], ['#F1948A','#F6B5AE'], ['#82E0AA','#A8ECC5'],
+      ['#F0B27A','#F5CCA4'], ['#AED6F1','#CEEAF8'], ['#D7BDE2','#E8D5F0'],
+    ]
+    const [bodyColor, bodyLight] = palettes[a % palettes.length]
+    const eyeStyle = a % 5    // round, happy, wink, star, heart
+    const mouthStyle = a % 4  // smile, grin, tongue, o
+    const accessory = a % 8   // none, hat, bow, crown, glasses, flower, bandana, none
+    const hasBlush = a % 3 !== 2
+    const hasFeet = a % 2 === 0
+    const earStyle = a % 3     // round, pointy, none
+    const bodyShape = a % 3    // circle, blob, square-ish
+
+    return { bodyColor, bodyLight, eyeStyle, mouthStyle, accessory, hasBlush, hasFeet, earStyle, bodyShape }
+  }, [name])
+
+  const { bodyColor, bodyLight, eyeStyle, mouthStyle, accessory, hasBlush, hasFeet, earStyle, bodyShape } = avatar
+
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" style={{ flexShrink: 0 }}>
+      {/* Ears */}
+      {earStyle === 0 && <>
+        <circle cx="22" cy="28" r="12" fill={bodyColor} />
+        <circle cx="78" cy="28" r="12" fill={bodyColor} />
+        <circle cx="22" cy="28" r="7" fill={bodyLight} />
+        <circle cx="78" cy="28" r="7" fill={bodyLight} />
+      </>}
+      {earStyle === 1 && <>
+        <polygon points="20,15 30,35 10,35" fill={bodyColor} />
+        <polygon points="80,15 90,35 70,35" fill={bodyColor} />
+      </>}
+
+      {/* Body */}
+      {bodyShape === 0 && <circle cx="50" cy="55" r="32" fill={bodyColor} />}
+      {bodyShape === 1 && <ellipse cx="50" cy="55" rx="34" ry="30" fill={bodyColor} />}
+      {bodyShape === 2 && <rect x="20" y="27" width="60" height="56" rx="18" fill={bodyColor} />}
+
+      {/* Belly */}
+      <ellipse cx="50" cy="60" rx="18" ry="16" fill={bodyLight} opacity="0.5" />
+
+      {/* Feet */}
+      {hasFeet && <>
+        <ellipse cx="36" cy="86" rx="10" ry="6" fill={bodyColor} />
+        <ellipse cx="64" cy="86" rx="10" ry="6" fill={bodyColor} />
+      </>}
+
+      {/* Arms */}
+      <ellipse cx="19" cy="58" rx="7" ry="5" fill={bodyColor} transform="rotate(-20 19 58)" />
+      <ellipse cx="81" cy="58" rx="7" ry="5" fill={bodyColor} transform="rotate(20 81 58)" />
+
+      {/* Eyes */}
+      {eyeStyle === 0 && <>
+        <circle cx="39" cy="48" r="6" fill="white" /><circle cx="39" cy="48" r="3.5" fill="#333" /><circle cx="40.5" cy="46.5" r="1.2" fill="white" />
+        <circle cx="61" cy="48" r="6" fill="white" /><circle cx="61" cy="48" r="3.5" fill="#333" /><circle cx="62.5" cy="46.5" r="1.2" fill="white" />
+      </>}
+      {eyeStyle === 1 && <>
+        <path d="M33 48 Q39 42 45 48" fill="none" stroke="#333" strokeWidth="2.5" strokeLinecap="round" />
+        <path d="M55 48 Q61 42 67 48" fill="none" stroke="#333" strokeWidth="2.5" strokeLinecap="round" />
+      </>}
+      {eyeStyle === 2 && <>
+        <circle cx="39" cy="48" r="6" fill="white" /><circle cx="39" cy="48" r="3.5" fill="#333" /><circle cx="40.5" cy="46.5" r="1.2" fill="white" />
+        <path d="M55 48 Q61 42 67 48" fill="none" stroke="#333" strokeWidth="2.5" strokeLinecap="round" />
+      </>}
+      {eyeStyle === 3 && <>
+        <text x="39" y="52" textAnchor="middle" fontSize="14" fill="#333">★</text>
+        <text x="61" y="52" textAnchor="middle" fontSize="14" fill="#333">★</text>
+      </>}
+      {eyeStyle === 4 && <>
+        <text x="39" y="52" textAnchor="middle" fontSize="13" fill="#e91e63">♥</text>
+        <text x="61" y="52" textAnchor="middle" fontSize="13" fill="#e91e63">♥</text>
+      </>}
+
+      {/* Blush */}
+      {hasBlush && <>
+        <circle cx="30" cy="58" r="5" fill="#FFB6C1" opacity="0.5" />
+        <circle cx="70" cy="58" r="5" fill="#FFB6C1" opacity="0.5" />
+      </>}
+
+      {/* Mouth */}
+      {mouthStyle === 0 && <path d="M42 63 Q50 72 58 63" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" />}
+      {mouthStyle === 1 && <path d="M40 63 Q50 74 60 63" fill="#333" />}
+      {mouthStyle === 2 && <>
+        <path d="M42 63 Q50 72 58 63" fill="none" stroke="#333" strokeWidth="2" strokeLinecap="round" />
+        <ellipse cx="50" cy="70" rx="4" ry="3" fill="#FF6B6B" />
+      </>}
+      {mouthStyle === 3 && <circle cx="50" cy="65" r="4" fill="#333" />}
+
+      {/* Accessories */}
+      {accessory === 1 && <>
+        <ellipse cx="50" cy="22" rx="20" ry="6" fill="#333" />
+        <rect x="38" y="8" width="24" height="16" rx="4" fill="#333" />
+        <rect x="42" y="18" width="16" height="4" rx="2" fill="#f9a825" />
+      </>}
+      {accessory === 2 && <>
+        <circle cx="35" cy="28" r="5" fill="#FF69B4" />
+        <circle cx="28" cy="25" r="4" fill="#FF69B4" />
+        <circle cx="32" cy="22" r="4" fill="#FF69B4" />
+      </>}
+      {accessory === 3 && <>
+        <polygon points="50,8 42,24 58,24" fill="#FFD700" />
+        <polygon points="42,8 34,22 50,22" fill="#FFD700" />
+        <polygon points="58,8 50,22 66,22" fill="#FFD700" />
+        <circle cx="42" cy="20" r="2" fill="#FF6B6B" />
+        <circle cx="50" cy="16" r="2" fill="#4FC3F7" />
+        <circle cx="58" cy="20" r="2" fill="#66BB6A" />
+      </>}
+      {accessory === 4 && <>
+        <circle cx="39" cy="48" r="9" fill="none" stroke="#333" strokeWidth="2" />
+        <circle cx="61" cy="48" r="9" fill="none" stroke="#333" strokeWidth="2" />
+        <line x1="48" y1="48" x2="52" y2="48" stroke="#333" strokeWidth="2" />
+      </>}
+      {accessory === 5 && <>
+        <circle cx="72" cy="30" r="6" fill="#FF69B4" />
+        <circle cx="72" cy="30" r="3" fill="#FFD700" />
+        <ellipse cx="68" cy="36" rx="3" ry="5" fill="#66BB6A" />
+      </>}
+      {accessory === 6 && <>
+        <path d="M25 32 Q50 20 75 32" fill={bodyColor} stroke="#f9a825" strokeWidth="2" strokeDasharray="3 2" />
+      </>}
+    </svg>
+  )
+}
+
+// ═════════════════════════════════════════════════════════════
+// SHARE BUTTON
+// ═════════════════════════════════════════════════════════════
+function ShareButton({ measurements, classification, name }) {
+  const [showMenu, setShowMenu] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  function buildMessage() {
+    const ms = measurements || {}
+    const lines = [
+      `🪙 Penny for Cancer — Mole Report`,
+      `━━━━━━━━━━━━━━━━━━━━━━`,
+      `Mole: ${name || 'Unnamed'}`,
+      ms.mole_diameter_mm ? `Diameter: ${ms.mole_diameter_mm} mm` : '',
+      ms.mole_area_sq_mm ? `Area: ${ms.mole_area_sq_mm} mm²` : '',
+      classification ? `AI Screening: ${classification.label === 'yes' ? '⚠️ Suspicious' : '✅ Likely Benign'} (${classification.confidence}% confidence)` : '',
+      ``,
+      classification?.label === 'yes'
+        ? `⚠️ This mole was flagged as suspicious when compared against 2,000+ dermoscopic samples from the Stanford MIDAS database. Please consider consulting a dermatologist.`
+        : `This mole was compared against 2,000+ dermoscopic samples from the Stanford MIDAS database using AI classification.`,
+      ``,
+      `🔗 Try it yourself: https://penny-for-cancer.vercel.app`,
+      ``,
+      `⚕️ Not a medical diagnosis. Always consult a qualified dermatologist.`
+    ]
+    return lines.filter(l => l !== '').join('\n')
+  }
+
+  async function handleShare(method) {
+    const msg = buildMessage()
+    if (method === 'native' && navigator.share) {
+      try {
+        await navigator.share({ title: 'Penny for Cancer — Mole Report', text: msg })
+      } catch {}
+    } else if (method === 'email') {
+      const subject = encodeURIComponent('Penny for Cancer — Mole Report')
+      const body = encodeURIComponent(msg)
+      window.open(`mailto:?subject=${subject}&body=${body}`)
+    } else if (method === 'copy') {
+      await navigator.clipboard.writeText(msg)
+      setCopied(true); setTimeout(() => setCopied(false), 2000)
+    }
+    setShowMenu(false)
+  }
+
+  return (
+    <div className="share-container">
+      <button className="btn btn-share" onClick={() => setShowMenu(!showMenu)}>
+        <ShareIcon /> Share Results
+      </button>
+      {showMenu && (
+        <div className="share-menu">
+          <button onClick={() => handleShare('copy')} className="share-option">
+            📋 {copied ? 'Copied!' : 'Copy to Clipboard'}
+          </button>
+          <button onClick={() => handleShare('email')} className="share-option">
+            📧 Email to a Doctor
+          </button>
+          {navigator.share && (
+            <button onClick={() => handleShare('native')} className="share-option">
+              📱 Share with a Friend
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 
 // ═════════════════════════════════════════════════════════════
 // MAIN APP — page router: 'home' | 'new' | 'existing'
@@ -19,6 +235,7 @@ export default function App() {
   const [status, setStatus] = useState({ type: '', msg: '' })
   const [maskPixelCount, setMaskPixelCount] = useState(0)
   const [classification, setClassification] = useState(null)
+  const [cropImageDataUrl, setCropImageDataUrl] = useState(null)
   const [selectedMole, setSelectedMole] = useState(null)
   const maskCanvasRef = useRef(null)
   const imgCanvasRef = useRef(null)
@@ -31,7 +248,7 @@ export default function App() {
 
   function goHome() {
     setPage('home'); setImage(null); setMeasurements(null)
-    setPennyData(null); setClassification(null); setSelectedMole(null)
+    setPennyData(null); setClassification(null); setCropImageDataUrl(null); setSelectedMole(null)
     setStatus({ type: '', msg: '' })
   }
 
@@ -41,13 +258,13 @@ export default function App() {
 
   function selectMoleAndAnalyze(m) {
     setSelectedMole(m); setImage(null); setMeasurements(null)
-    setPennyData(null); setClassification(null)
+    setPennyData(null); setClassification(null); setCropImageDataUrl(null)
     setStatus({ type: '', msg: '' }); setPage('new')
   }
 
   async function handleUpload(file) {
     setStatus({ type: 'loading', msg: 'Uploading...' })
-    setMeasurements(null); setPennyData(null); setClassification(null)
+    setMeasurements(null); setPennyData(null); setClassification(null); setCropImageDataUrl(null)
     const fd = new FormData(); fd.append('image', file)
     try {
       const r = await fetch(`${API}/api/upload`, { method: 'POST', body: fd })
@@ -57,46 +274,10 @@ export default function App() {
     } catch (e) { setStatus({ type: 'error', msg: e.message }) }
   }
 
-  async function handleDetect() {
-    const count = countMaskPixels()
-    if (count < 50) { setStatus({ type: 'error', msg: 'Paint over the mole first.' }); return }
-    setMaskPixelCount(count)
-    setStatus({ type: 'loading', msg: 'Running Roboflow penny detection...' }); setMeasurements(null)
-    try {
-      const r1 = await fetch(`${API}/api/detect-penny`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_path: image.filename }),
-      })
-      const d1 = await r1.json(); if (d1.error) throw new Error(d1.error)
-      const pennyArea = extractPennyArea(d1.result)
-      if (!pennyArea) throw new Error('No penny detected. Make sure a penny is visible in the photo.')
-      setPennyData(pennyArea)
-      const r2 = await fetch(`${API}/api/calculate`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mask_pixel_count: count, penny_pixel_area: pennyArea.area }),
-      })
-      const d2 = await r2.json(); if (d2.error) throw new Error(d2.error)
-      setMeasurements(d2); setStatus({ type: 'success', msg: 'Measurement complete!' })
-    } catch (e) { setStatus({ type: 'error', msg: e.message }) }
-  }
-
-  async function handleSave(name, date, notes) {
-    try {
-      await fetch(`${API}/api/moles`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, date, notes, image_filename: image.filename, mask_pixel_count: maskPixelCount, measurements }),
-      })
-      setStatus({ type: 'success', msg: `Saved "${name}".` }); loadHistory()
-    } catch (e) { setStatus({ type: 'error', msg: e.message }) }
-  }
-
-  async function handleDelete(id) {
-    await fetch(`${API}/api/moles?id=${id}`, { method: 'DELETE' }); loadHistory()
-  }
-
-  async function handleClassify() {
+  // Crop mole region from canvas and return { dataUrl, base64 }
+  function cropMoleImage() {
     const mc = maskCanvasRef.current, ic = imgCanvasRef.current
-    if (!mc || !ic) { setStatus({ type: 'error', msg: 'No image loaded.' }); return }
+    if (!mc || !ic) return null
     const maskData = mc.getContext('2d').getImageData(0, 0, mc.width, mc.height).data
     let minX = mc.width, minY = mc.height, maxX = 0, maxY = 0
     for (let y = 0; y < mc.height; y++)
@@ -105,7 +286,7 @@ export default function App() {
           if (x < minX) minX = x; if (x > maxX) maxX = x
           if (y < minY) minY = y; if (y > maxY) maxY = y
         }
-    if (maxX <= minX || maxY <= minY) { setStatus({ type: 'error', msg: 'Paint over the mole first.' }); return }
+    if (maxX <= minX || maxY <= minY) return null
     const pad = 20
     minX = Math.max(0, minX - pad); minY = Math.max(0, minY - pad)
     maxX = Math.min(mc.width, maxX + pad); maxY = Math.min(mc.height, maxY + pad)
@@ -117,17 +298,80 @@ export default function App() {
     const cropCanvas = document.createElement('canvas')
     cropCanvas.width = cropSize; cropCanvas.height = cropSize
     cropCanvas.getContext('2d').drawImage(ic, cropX, cropY, cropSize, cropSize, 0, 0, cropSize, cropSize)
-    const b64 = cropCanvas.toDataURL('image/jpeg', 0.9).split(',')[1]
-    setStatus({ type: 'loading', msg: 'Running comparison against Stanford MIDAS database (2,000 samples)...' })
-    setClassification(null)
+    const dataUrl = cropCanvas.toDataURL('image/jpeg', 0.9)
+    const b64 = dataUrl.split(',')[1]
+    return { dataUrl, b64 }
+  }
+
+  async function handleDetect() {
+    const count = countMaskPixels()
+    if (count < 50) { setStatus({ type: 'error', msg: 'Paint over the mole first.' }); return }
+    setMaskPixelCount(count)
+    setStatus({ type: 'loading', msg: 'Running Roboflow penny detection...' })
+    setMeasurements(null); setClassification(null); setCropImageDataUrl(null)
     try {
-      const r = await fetch(`${API}/api/classify-mole`, {
+      // Step 1: Detect penny
+      const r1 = await fetch(`${API}/api/detect-penny`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image_base64: b64 }),
+        body: JSON.stringify({ image_path: image.filename }),
       })
-      const d = await r.json(); if (d.error) throw new Error(d.error)
-      setClassification(d); setStatus({ type: 'success', msg: 'Comparison complete.' })
+      const d1 = await r1.json(); if (d1.error) throw new Error(d1.error)
+      const pennyArea = extractPennyArea(d1.result)
+      if (!pennyArea) throw new Error('No penny detected. Make sure a penny is visible in the photo.')
+      setPennyData(pennyArea)
+
+      // Step 2: Calculate measurements
+      const r2 = await fetch(`${API}/api/calculate`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mask_pixel_count: count, penny_pixel_area: pennyArea.area }),
+      })
+      const d2 = await r2.json(); if (d2.error) throw new Error(d2.error)
+      setMeasurements(d2)
+      setStatus({ type: 'loading', msg: 'Comparing against 2,000+ Stanford MIDAS samples...' })
+
+      // Step 3: Auto-run classification
+      const crop = cropMoleImage()
+      if (crop) {
+        setCropImageDataUrl(crop.dataUrl)
+        const r3 = await fetch(`${API}/api/classify-mole`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_base64: crop.b64 }),
+        })
+        const d3 = await r3.json()
+        if (!d3.error) {
+          setClassification(d3)
+          setStatus({ type: 'success', msg: 'Measurement & AI screening complete!' })
+        } else {
+          setStatus({ type: 'success', msg: 'Measurement complete. AI screening unavailable.' })
+        }
+      } else {
+        setStatus({ type: 'success', msg: 'Measurement complete!' })
+      }
     } catch (e) { setStatus({ type: 'error', msg: e.message }) }
+  }
+
+  async function handleSave(name, date, notes) {
+    try {
+      await fetch(`${API}/api/moles`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name, date, notes,
+          image_filename: image.filename,
+          mask_pixel_count: maskPixelCount,
+          measurements,
+          classification: classification ? {
+            label: classification.label,
+            confidence: classification.confidence,
+          } : null,
+          crop_image: cropImageDataUrl || null,
+        }),
+      })
+      setStatus({ type: 'success', msg: `Saved "${name}"! 🎉` }); loadHistory()
+    } catch (e) { setStatus({ type: 'error', msg: e.message }) }
+  }
+
+  async function handleDelete(id) {
+    await fetch(`${API}/api/moles?id=${id}`, { method: 'DELETE' }); loadHistory()
   }
 
   function countMaskPixels() {
@@ -178,8 +422,9 @@ export default function App() {
                 <>
                   <PaintToolbar />
                   <MoleForm
-                    onDetect={handleDetect} onSave={handleSave} onClassify={handleClassify}
+                    onDetect={handleDetect} onSave={handleSave}
                     status={status} measurements={measurements} classification={classification}
+                    cropImageDataUrl={cropImageDataUrl}
                     selectedMole={selectedMole} onClearSelection={() => setSelectedMole(null)}
                   />
                 </>
@@ -209,10 +454,8 @@ export default function App() {
 // HOME PAGE
 // ═════════════════════════════════════════════════════════════
 function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
-  // Recent 10 measurements (most recent first)
-  const recent = [...moles].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 10)
+  const recent = [...moles].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 10)
 
-  // Group all for summary counts
   const grouped = {}
   moles.forEach(m => {
     const key = m.name || 'Unnamed'
@@ -246,7 +489,7 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
             </svg>
           </div>
           <h3>New Mole Analysis</h3>
-          <p>Upload a new photo with a penny for scale, label the mole with the brush tool, and get an instant size measurement.</p>
+          <p>Upload a new photo with a penny for scale, label the mole with the brush tool, and get an instant size measurement + AI screening.</p>
         </button>
 
         <button className="action-card existing-card" onClick={onExisting}>
@@ -269,18 +512,29 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
         ) : (
           <div className="recent-table">
             <div className="recent-header">
-              <span>Name</span><span>Date</span><span>Diameter</span><span>Area</span><span></span>
+              <span></span><span>Name</span><span>Date</span><span>Diameter</span><span>AI Screen</span><span></span>
             </div>
             {recent.map(m => {
               const ms = m.measurements || {}
+              const cls = m.classification
               return (
                 <div key={m.id} className="recent-row">
+                  <span className="recent-avatar">
+                    {m.crop_image
+                      ? <img src={m.crop_image} alt="" className="recent-thumb" />
+                      : <MoleAvatar name={m.name || 'Mole'} size={36} />
+                    }
+                  </span>
                   <span className="recent-name">{m.name}</span>
                   <span className="recent-date">{m.date}</span>
                   <span className={`recent-diam ${ms.mole_diameter_mm >= 6 ? 'danger' : ms.mole_diameter_mm >= 4 ? 'warn' : 'safe'}`}>
                     {ms.mole_diameter_mm ? `${ms.mole_diameter_mm} mm` : '—'}
                   </span>
-                  <span>{ms.mole_area_sq_mm ? `${ms.mole_area_sq_mm} mm\u00B2` : '—'}</span>
+                  <span className={`recent-cls ${cls?.label === 'yes' ? 'cls-flag' : cls?.label === 'no' ? 'cls-ok' : ''}`}>
+                    {cls ? (
+                      <>{cls.label === 'yes' ? '⚠️' : '✅'} {cls.confidence}%</>
+                    ) : '—'}
+                  </span>
                   <span className="recent-actions">
                     <button className="link-btn" onClick={() => onSelectMole(m)}>Re-measure</button>
                     <button className="link-btn danger-link" onClick={() => onDelete(m.id)}>&times;</button>
@@ -394,10 +648,16 @@ function ExistingMolePage({ moles, onSelect, onDelete, onBack }) {
             const ms = latest.measurements || {}
             return (
               <div key={name} className="existing-card" onClick={() => onSelect(latest)}>
-                <div className="existing-card-header">
-                  <span className="existing-name">{name}</span>
-                  <span className="existing-count">{entries.length} record{entries.length > 1 ? 's' : ''}</span>
+                <div className="existing-card-top">
+                  <MoleAvatar name={name} size={52} />
+                  <div className="existing-card-header">
+                    <span className="existing-name">{name}</span>
+                    <span className="existing-count">{entries.length} record{entries.length > 1 ? 's' : ''}</span>
+                  </div>
                 </div>
+                {latest.crop_image && (
+                  <img src={latest.crop_image} alt="" className="existing-crop-thumb" />
+                )}
                 <div className="existing-stats">
                   {ms.mole_diameter_mm && (
                     <span className={ms.mole_diameter_mm >= 6 ? 'danger' : ms.mole_diameter_mm >= 4 ? 'warn' : 'safe'}>
@@ -406,6 +666,11 @@ function ExistingMolePage({ moles, onSelect, onDelete, onBack }) {
                   )}
                   {ms.mole_area_sq_mm && <span>{ms.mole_area_sq_mm} mm&sup2;</span>}
                 </div>
+                {latest.classification && (
+                  <div className={`existing-cls ${latest.classification.label === 'yes' ? 'cls-flag' : 'cls-ok'}`}>
+                    {latest.classification.label === 'yes' ? '⚠️ Suspicious' : '✅ Likely Benign'} ({latest.classification.confidence}%)
+                  </div>
+                )}
                 <div className="existing-dates">Last measured: {latest.date}</div>
                 {entries.length > 1 && (
                   <div className="existing-history">
@@ -632,14 +897,20 @@ function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData }) {
 }
 
 // ═════════════════════════════════════════════════════════════
-// MOLE FORM
+// MOLE FORM — fun naming + auto classification results
 // ═════════════════════════════════════════════════════════════
-function MoleForm({ onDetect, onSave, onClassify, status, measurements, classification, selectedMole, onClearSelection }) {
+function MoleForm({ onDetect, onSave, status, measurements, classification, cropImageDataUrl, selectedMole, onClearSelection }) {
   const [name, setName] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [notes, setNotes] = useState('')
+  const [showNamePicker, setShowNamePicker] = useState(false)
 
   useEffect(() => { if (selectedMole) setName(selectedMole.name) }, [selectedMole])
+
+  function randomName() {
+    const n = FUN_NAMES[Math.floor(Math.random() * FUN_NAMES.length)]
+    setName(n)
+  }
 
   function diamClass(mm) { return mm >= 6 ? 'danger' : mm >= 4 ? 'warn' : 'safe' }
 
@@ -651,7 +922,7 @@ function MoleForm({ onDetect, onSave, onClassify, status, measurements, classifi
 
   return (
     <div className="sidebar-section">
-      <h3>{selectedMole ? 'Re-measure Existing Mole' : 'Mole Details'}</h3>
+      <h3>{selectedMole ? 'Re-measure Existing Mole' : 'Name Your Mole Buddy'}</h3>
       {selectedMole && (
         <div className="remeasure-banner">
           <div className="remeasure-info">Re-measuring: <strong>{selectedMole.name}</strong>
@@ -660,49 +931,88 @@ function MoleForm({ onDetect, onSave, onClassify, status, measurements, classifi
           <button className="btn btn-outline btn-sm" onClick={onClearSelection}>New mole instead</button>
         </div>
       )}
-      <div className="field"><label>Name</label><input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Left shoulder mole" /></div>
+
+      {/* Fun name section with live avatar preview */}
+      <div className="name-section">
+        <div className="name-row">
+          <div className="name-avatar-preview">
+            <MoleAvatar name={name || 'Mole'} size={56} />
+          </div>
+          <div className="name-input-area">
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>Mole Name</label>
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Give it a fun name!" />
+            </div>
+          </div>
+        </div>
+        <div className="name-buttons">
+          <button className="btn-mini btn-dice" onClick={randomName} title="Random fun name">🎲 Random Name</button>
+          <button className="btn-mini btn-list" onClick={() => setShowNamePicker(!showNamePicker)} title="Pick from list">
+            {showNamePicker ? '✕ Close' : '📋 Name Ideas'}
+          </button>
+        </div>
+        {showNamePicker && (
+          <div className="name-picker">
+            {FUN_NAMES.map(n => (
+              <button key={n} className={`name-chip ${name === n ? 'active' : ''}`} onClick={() => { setName(n); setShowNamePicker(false) }}>
+                <MoleAvatar name={n} size={24} /> {n}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="field"><label>Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
       <div className="field"><label>Notes</label><textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any observations..." /></div>
-      <button className="btn btn-primary" onClick={onDetect}><SearchIcon /> Detect Penny &amp; Measure</button>
+      <button className="btn btn-primary" onClick={onDetect}><SearchIcon /> Detect Penny, Measure &amp; Screen</button>
 
       {status.msg && <div className={`status-bar ${status.type}`}>{status.type === 'loading' && <span className="spinner" />}{status.msg}</div>}
 
       {measurements && (
         <>
           <div className="results-panel">
-            <h4>Measurements</h4>
+            <h4>📏 Measurements</h4>
             <div className="result-row"><span className="rlabel">Penny area (px)</span><span className="rvalue">{measurements.penny_pixel_area.toLocaleString()}</span></div>
             <div className="result-row"><span className="rlabel">Mole area (px)</span><span className="rvalue">{measurements.mole_pixel_count.toLocaleString()}</span></div>
             <div className="result-row"><span className="rlabel">Mole area</span><span className="rvalue">{measurements.mole_area_sq_mm} mm&sup2; ({measurements.mole_area_sq_inches} in&sup2;)</span></div>
             <div className="result-row"><span className="rlabel">Mole diameter</span><span className={`rvalue ${diamClass(measurements.mole_diameter_mm)}`}>{measurements.mole_diameter_mm} mm ({measurements.mole_diameter_inches} in)</span></div>
           </div>
+
+          {/* Classification result — auto-run, shown inline */}
+          {classification && (
+            <div className={`classification-result ${classification.label === 'yes' ? 'cls-positive' : 'cls-negative'}`}>
+              <div className="cls-source">🔬 AI Screening — 2,000+ dermoscopic samples from the Stanford MIDAS database</div>
+              <div className="cls-header">
+                <span className="cls-icon">{classification.label === 'yes' ? '⚠' : '✓'}</span>
+                <span className="cls-verdict">{classification.label === 'yes' ? 'Suspicious' : 'Likely Benign'}</span>
+              </div>
+              <div className="cls-confidence">Confidence: <strong>{classification.confidence}%</strong></div>
+              {cropImageDataUrl && (
+                <div className="cls-crop-preview">
+                  <img src={cropImageDataUrl} alt="Cropped mole" />
+                  <span className="cls-crop-label">Analyzed region</span>
+                </div>
+              )}
+              <div className="cls-label">{classification.label === 'yes' ? 'This mole shares features with potentially malignant samples. Please consult a dermatologist.' : 'This mole appears similar to benign samples. Continue monitoring for changes.'}</div>
+              <div className="cls-disclaimer">This is not a medical diagnosis. Always consult a qualified dermatologist for clinical evaluation.</div>
+            </div>
+          )}
+
           {growthInfo && (
             <div className={`growth-alert ${growthInfo.pctChange >= 20 ? 'growth-danger' : growthInfo.pctChange > 0 ? 'growth-warn' : 'growth-ok'}`}>
-              <div className="growth-header">{growthInfo.pctChange >= 20 ? '\u26A0 Significant Growth Detected' : growthInfo.pctChange > 0 ? 'Slight Growth' : 'No Growth / Smaller'}</div>
+              <div className="growth-header">{growthInfo.pctChange >= 20 ? '⚠ Significant Growth Detected' : growthInfo.pctChange > 0 ? 'Slight Growth' : 'No Growth / Smaller'}</div>
               <div className="growth-detail">{growthInfo.oldArea} mm&sup2; &rarr; {growthInfo.newArea} mm&sup2; ({growthInfo.pctChange > 0 ? '+' : ''}{growthInfo.pctChange}%)</div>
               {growthInfo.pctChange >= 20 && <div className="growth-warning">This mole has grown more than 20% since last measurement. Please consult a dermatologist.</div>}
             </div>
           )}
-          <button className="btn btn-success" style={{ marginTop: 8 }} onClick={() => onSave(name || 'Unnamed', date, notes)}>Save Record</button>
+
+          {/* Share + Save buttons */}
+          <div className="action-row">
+            <ShareButton measurements={measurements} classification={classification} name={name || 'Unnamed'} />
+            <button className="btn btn-success" onClick={() => onSave(name || 'Unnamed', date, notes)}>💾 Save Record</button>
+          </div>
         </>
       )}
-
-      <div className="comparison-tool">
-        <h4>Comparison Tool</h4>
-        <p className="comparison-desc">Crop the labeled mole and compare it against <strong>2,000+ dermoscopic samples</strong> from the Stanford MIDAS database using AI classification.</p>
-        <button className="btn btn-compare" onClick={onClassify}><CompareIcon /> Run Comparison</button>
-        {classification && (
-          <div className={`classification-result ${classification.label === 'yes' ? 'cls-positive' : 'cls-negative'}`}>
-            <div className="cls-header">
-              <span className="cls-icon">{classification.label === 'yes' ? '\u26A0' : '\u2713'}</span>
-              <span className="cls-verdict">{classification.label === 'yes' ? 'Suspicious' : 'Likely Benign'}</span>
-            </div>
-            <div className="cls-confidence">Confidence: <strong>{classification.confidence}%</strong></div>
-            <div className="cls-label">Model result: <strong>{classification.label === 'yes' ? 'YES' : 'NO'}</strong> &mdash; {classification.label === 'yes' ? 'This mole shares features with potentially malignant samples. Please consult a dermatologist.' : 'This mole appears similar to benign samples. Continue monitoring for changes.'}</div>
-            <div className="cls-disclaimer">This is not a medical diagnosis. Always consult a qualified dermatologist for clinical evaluation.</div>
-          </div>
-        )}
-      </div>
     </div>
   )
 }
@@ -744,4 +1054,4 @@ function BrushIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fi
 function EraserIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 20H7L3 16l9-9 8 8-4 4z"/><path d="M6.5 13.5l5-5"/></svg> }
 function TrashIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg> }
 function SearchIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> }
-function CompareIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M16 3h5v5"/><path d="M4 20L21 3"/><path d="M21 16v5h-5"/><path d="M15 15l6 6"/><path d="M4 4l5 5"/></svg> }
+function ShareIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg> }

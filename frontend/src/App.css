@@ -82,22 +82,31 @@ body {
   background: #13131a; border: 1px solid #2a2a4a; border-radius: 12px; overflow: hidden;
 }
 .recent-header {
-  display: grid; grid-template-columns: 2fr 1.2fr 1fr 1.2fr 1fr;
+  display: grid; grid-template-columns: 44px 2fr 1fr 0.8fr 0.8fr 0.8fr;
   padding: 10px 16px; background: #1a1a2e;
   font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: #666;
+  align-items: center;
 }
 .recent-row {
-  display: grid; grid-template-columns: 2fr 1.2fr 1fr 1.2fr 1fr;
-  padding: 10px 16px; border-top: 1px solid #1e1e2e;
+  display: grid; grid-template-columns: 44px 2fr 1fr 0.8fr 0.8fr 0.8fr;
+  padding: 8px 16px; border-top: 1px solid #1e1e2e;
   font-size: 0.82rem; align-items: center;
 }
 .recent-row:hover { background: rgba(255,255,255,0.02); }
+.recent-avatar { display: flex; align-items: center; }
+.recent-thumb {
+  width: 36px; height: 36px; border-radius: 8px; object-fit: cover;
+  border: 1px solid #2a2a4a;
+}
 .recent-name { color: #f9a825; font-weight: 600; }
 .recent-date { color: #888; }
 .recent-diam { font-weight: 600; }
 .recent-diam.safe { color: #66bb6a; }
 .recent-diam.warn { color: #ff9800; }
 .recent-diam.danger { color: #ef5350; }
+.recent-cls { font-size: 0.76rem; }
+.recent-cls.cls-flag { color: #ef5350; }
+.recent-cls.cls-ok { color: #66bb6a; }
 .recent-actions { display: flex; gap: 8px; }
 
 .link-btn {
@@ -164,7 +173,9 @@ body {
 }
 .existing-card:hover { border-color: #f9a825; transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
-.existing-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.existing-card-top { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+.existing-crop-thumb { width: 100%; max-height: 120px; object-fit: cover; border-radius: 8px; margin-bottom: 8px; border: 1px solid #2a2a4a; }
+.existing-card-header { display: flex; flex-direction: column; gap: 2px; }
 .existing-name { font-weight: 700; color: #f9a825; font-size: 1rem; }
 .existing-count { font-size: 0.72rem; color: #666; }
 .existing-stats { display: flex; gap: 12px; font-size: 0.84rem; margin-bottom: 6px; }
@@ -176,6 +187,12 @@ body {
 .existing-entry {
   display: flex; gap: 12px; align-items: center; font-size: 0.76rem; color: #888; padding: 3px 0;
 }
+.existing-cls {
+  font-size: 0.76rem; margin-bottom: 6px; padding: 4px 8px;
+  border-radius: 6px; display: inline-block;
+}
+.existing-cls.cls-flag { background: rgba(239,83,80,0.1); color: #ef5350; }
+.existing-cls.cls-ok { background: rgba(102,187,106,0.1); color: #66bb6a; }
 .existing-cta {
   margin-top: 10px; font-size: 0.78rem; color: #4fc3f7; font-weight: 600;
 }
@@ -367,5 +384,90 @@ body {
 .cls-label { font-size: 0.78rem; color: #aaa; line-height: 1.5; margin-bottom: 8px; }
 .cls-label strong { color: #fff; }
 .cls-disclaimer { font-size: 0.68rem; color: #666; font-style: italic; border-top: 1px solid #2a2a4a; padding-top: 8px; }
+
+/* ═══ FUN NAME SECTION ═══ */
+.name-section {
+  margin-bottom: 12px;
+}
+.name-row {
+  display: flex; gap: 12px; align-items: center; margin-bottom: 8px;
+}
+.name-avatar-preview {
+  flex-shrink: 0; background: #1a1a2e; border-radius: 12px; padding: 4px;
+  border: 2px solid #2a2a4a; transition: border-color 0.3s;
+}
+.name-avatar-preview:hover { border-color: #f9a825; }
+.name-input-area { flex: 1; }
+.name-buttons {
+  display: flex; gap: 6px; margin-bottom: 8px;
+}
+.btn-mini {
+  background: #1e1e2e; border: 1px solid #3a3a5a; color: #ccc;
+  padding: 5px 10px; border-radius: 8px; font-size: 0.72rem;
+  cursor: pointer; transition: all 0.15s; font-family: inherit;
+}
+.btn-mini:hover { border-color: #f9a825; color: #f9a825; }
+.btn-dice:hover { border-color: #4fc3f7; color: #4fc3f7; }
+.name-picker {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  max-height: 200px; overflow-y: auto; padding: 8px;
+  background: #1a1a2e; border-radius: 10px; border: 1px solid #2a2a4a;
+}
+.name-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #13131a; border: 1px solid #3a3a5a; color: #ccc;
+  padding: 4px 10px; border-radius: 20px; font-size: 0.72rem;
+  cursor: pointer; transition: all 0.15s; font-family: inherit;
+  white-space: nowrap;
+}
+.name-chip:hover { border-color: #f9a825; color: #f9a825; transform: scale(1.05); }
+.name-chip.active { border-color: #f9a825; background: rgba(249,168,37,0.1); color: #f9a825; }
+
+/* ═══ SHARE BUTTON ═══ */
+.share-container { position: relative; }
+.btn-share {
+  background: linear-gradient(135deg, #f9a825, #ff8f00); color: #000;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 10px 16px; border-radius: 8px; border: none;
+  font-size: 0.84rem; font-weight: 700; cursor: pointer;
+  transition: all 0.15s; width: 100%; justify-content: center;
+  font-family: inherit;
+}
+.btn-share:hover { opacity: 0.9; transform: translateY(-1px); box-shadow: 0 4px 12px rgba(249,168,37,0.3); }
+.share-menu {
+  position: absolute; bottom: 100%; left: 0; right: 0;
+  background: #1a1a2e; border: 1px solid #3a3a5a;
+  border-radius: 10px; overflow: hidden; margin-bottom: 6px;
+  box-shadow: 0 -8px 24px rgba(0,0,0,0.4); z-index: 20;
+}
+.share-option {
+  display: block; width: 100%; padding: 10px 14px;
+  background: none; border: none; border-bottom: 1px solid #2a2a4a;
+  color: #ccc; font-size: 0.82rem; cursor: pointer; text-align: left;
+  font-family: inherit; transition: background 0.15s;
+}
+.share-option:last-child { border-bottom: none; }
+.share-option:hover { background: rgba(249,168,37,0.08); color: #f9a825; }
+
+.action-row {
+  display: flex; gap: 8px; margin-top: 10px;
+}
+.action-row > * { flex: 1; }
+
+/* ═══ CLASSIFICATION ENHANCEMENTS ═══ */
+.cls-source {
+  font-size: 0.68rem; color: #ce93d8; margin-bottom: 8px;
+  letter-spacing: 0.3px; font-weight: 600; text-transform: uppercase;
+}
+.cls-crop-preview {
+  margin: 8px 0; text-align: center;
+}
+.cls-crop-preview img {
+  width: 80px; height: 80px; border-radius: 10px; object-fit: cover;
+  border: 2px solid #2a2a4a;
+}
+.cls-crop-label {
+  display: block; font-size: 0.66rem; color: #666; margin-top: 4px;
+}
 
 .muted { color: #555; font-size: 0.84rem; }

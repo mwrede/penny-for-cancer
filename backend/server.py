@@ -203,6 +203,8 @@ def save_mole():
         "image_filename": data.get("image_filename"),
         "mask_pixel_count": data.get("mask_pixel_count"),
         "measurements": data.get("measurements"),
+        "classification": data.get("classification"),
+        "crop_image": data.get("crop_image"),
         "notes": data.get("notes", ""),
     }
     moles.append(record)
