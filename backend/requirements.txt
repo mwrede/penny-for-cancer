@@ -1,0 +1,4 @@
+flask==3.1.0
+flask-cors==5.0.1
+inference-sdk>=1.0.0
+Pillow==11.1.0
