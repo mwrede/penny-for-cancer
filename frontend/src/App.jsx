@@ -450,7 +450,7 @@ function ShareButton({ measurements, classification, name }) {
       `Mole: ${name || 'Unnamed'}`,
       ms.mole_diameter_mm ? `Diameter: ${ms.mole_diameter_mm} mm` : '',
       ms.mole_area_sq_mm ? `Area: ${ms.mole_area_sq_mm} mm²` : '',
-      classification ? `AI Screening: ${classification.label === 'yes' ? '⚠️ Suspicious' : '✅ Likely Benign'} (${classification.confidence}% confidence)` : '',
+      classification ? `AI Comparison with 2,000 Real Examples of Cancer and False Positives: ${classification.label === 'yes' ? '⚠️ Suspicious' : '✅ Likely Benign'} (${classification.confidence}% confidence)` : '',
       ``,
       classification?.label === 'yes'
         ? `⚠️ This mole was flagged as suspicious when compared against 2,000+ dermoscopic samples from the Stanford MIDAS database. Please consider consulting a dermatologist.`
@@ -1004,7 +1004,7 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
         ) : (
           <div className="recent-table">
             <div className="recent-header">
-              <span></span><span>Name</span><span>Date</span><span>Diameter</span><span>AI Screen</span><span></span>
+              <span></span><span>Name</span><span>Date</span><span>Diameter</span><span>AI Comparison</span><span></span>
             </div>
             {recent.map(m => {
               const ms = m.measurements || {}
@@ -1523,7 +1523,7 @@ function ResultsPage({ name, setName, date, setDate, notes, setNotes, avatarConf
 
           {classification && (
             <div className={`classification-result reveal-in reveal-delay-2 ${classification.label === 'yes' ? 'cls-positive' : 'cls-negative'}`}>
-              <div className="cls-source">🔬 AI Screening &mdash; Stanford MIDAS</div>
+              <div className="cls-source">🔬 AI Comparison with 2,000 Real Examples of Cancer and False Positives</div>
               <div className="cls-header">
                 <MoleAvatar config={avatarConfig} size={40} />
                 <span className="cls-icon">{classification.label === 'yes' ? '⚠' : '✓'}</span>
