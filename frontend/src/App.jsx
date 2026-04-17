@@ -605,26 +605,11 @@ export default function App() {
       // Compress image for API calls (keeps under Vercel body size limit)
       const { b64, width, height, url, scaleBack } = await compressImage(file)
       setImage({ filename: file.name, width, height, url, base64: b64, scaleBack: scaleBack || 1 })
-      if (isMobileViewport()) {
-        setFlowStep('target')
-        setStatus({ type: 'info', msg: 'Tap the center of your mole to zoom in.' })
-      } else {
-        setFlowStep('paint')
-        setStatus({ type: 'success', msg: 'Image loaded. Paint over the mole, then click Detect.' })
-      }
+      // Always go straight to paint — start with tool='off' so the user can zoom/pan without accidentally drawing
+      setPaintSettings(prev => ({ ...prev, tool: 'off' }))
+      setFlowStep('paint')
+      setStatus({ type: 'info', msg: 'Tap "Start Labeling" when ready to paint.' })
     } catch (e) { setStatus({ type: 'error', msg: e.message }) }
-  }
-
-  // Called from CanvasEditor tap-target overlay on mobile
-  function handleTapTarget(tapX, tapY, imgW, imgH) {
-    // Window size: ~25% of the shorter image side, clamped to 280–600px. Gives a nice zoom for phones.
-    const side = Math.min(imgW, imgH)
-    const size = Math.max(280, Math.min(600, Math.round(side * 0.28)))
-    const x = Math.max(0, Math.min(Math.round(tapX - size / 2), imgW - size))
-    const y = Math.max(0, Math.min(Math.round(tapY - size / 2), imgH - size))
-    setCropRect({ x, y, size })
-    setFlowStep('paint')
-    setStatus({ type: 'success', msg: 'Now paint over the mole in the zoomed view.' })
   }
 
   // Crop mole region from canvas and return { dataUrl, base64 }
@@ -892,15 +877,6 @@ export default function App() {
                 <button className="btn btn-outline" onClick={goHome}>&larr; Back to Home</button>
               </div>
               <UploadSection onUpload={handleUpload} />
-              {image && flowStep === 'target' && (
-                <div className="sidebar-section">
-                  <h3>Step 1 of 3</h3>
-                  <p style={{ fontSize: '0.85rem', color: '#aaa', lineHeight: 1.5 }}>
-                    Tap the <strong style={{ color: '#f9a825' }}>center of your mole</strong> in the photo. We&rsquo;ll zoom in so you can paint it precisely.
-                  </p>
-                  {status.msg && <div className={`status-bar ${status.type}`}>{status.msg}</div>}
-                </div>
-              )}
               {image && flowStep === 'paint' && (
                 <>
                   <PaintToolbar />
@@ -929,9 +905,6 @@ export default function App() {
                   maskCanvasRef={maskCanvasRef}
                   imgCanvasRef={imgCanvasRef}
                   pennyData={pennyData}
-                  flowStep={flowStep}
-                  cropRect={cropRect}
-                  onTapTarget={handleTapTarget}
                 />
               )}
             </main>
@@ -1241,29 +1214,37 @@ function UploadSection({ onUpload }) {
 function PaintToolbar() {
   const { paintSettings: ps, setPaintSettings } = useContext(PaintContext)
   const update = (u) => setPaintSettings(prev => ({ ...prev, ...u }))
+  const locked = ps.tool === 'off'
   return (
     <div className="sidebar-section">
       <h3>Label Your Mole</h3>
-      <div className="brush-instructions">
-        <p>Use the <strong>brush</strong> to paint over the entire mole or worrisome skin area you want to measure:</p>
-        <ul>
-          <li><strong>Trace the outline</strong> of the mole along its edges</li>
-          <li><strong>Fill in the center</strong> completely &mdash; every painted pixel counts</li>
-          <li>Use a <strong>smaller brush</strong> for edges, <strong>larger</strong> to fill</li>
-          <li>Switch to the <strong>eraser</strong> to clean up overpaint</li>
-          <li>Use <strong>zoom (+/&minus;)</strong> bottom-right for detail work</li>
-        </ul>
-      </div>
-      <div className="paint-tools">
-        <button className={`tool-btn ${ps.tool === 'brush' ? 'active' : ''}`} onClick={() => update({ tool: 'brush' })} title="Brush"><BrushIcon /></button>
-        <button className={`tool-btn ${ps.tool === 'eraser' ? 'active' : ''}`} onClick={() => update({ tool: 'eraser' })} title="Eraser"><EraserIcon /></button>
-        <button className="tool-btn" onClick={() => update({ clearToken: Date.now() })} title="Clear mask"><TrashIcon /></button>
-        <input type="color" value={ps.color} onChange={e => update({ color: e.target.value })} className="color-input" />
-      </div>
-      <div className="slider-row"><span className="slider-label">Brush: {ps.brushSize}px</span>
-        <input type="range" min="2" max="60" value={ps.brushSize} onChange={e => update({ brushSize: +e.target.value })} /></div>
-      <div className="slider-row"><span className="slider-label">Opacity: {ps.opacity}%</span>
-        <input type="range" min="10" max="90" value={ps.opacity} onChange={e => update({ opacity: +e.target.value })} /></div>
+      {locked ? (
+        <>
+          <div className="brush-instructions">
+            <p>Zoom in with <strong>+/−</strong> until the mole is big enough to paint comfortably, then tap <strong>Start Labeling</strong>.</p>
+          </div>
+          <button className="btn btn-primary btn-start-labeling" onClick={() => update({ tool: 'brush' })}>
+            🖌 Start Labeling
+          </button>
+        </>
+      ) : (
+        <>
+          <div className="brush-instructions">
+            <p>Paint over the mole. Use the <strong>eraser</strong> to fix mistakes, or <strong>🔒 Pause</strong> to zoom without drawing.</p>
+          </div>
+          <div className="paint-tools">
+            <button className={`tool-btn ${ps.tool === 'brush' ? 'active' : ''}`} onClick={() => update({ tool: 'brush' })} title="Brush"><BrushIcon /></button>
+            <button className={`tool-btn ${ps.tool === 'eraser' ? 'active' : ''}`} onClick={() => update({ tool: 'eraser' })} title="Eraser"><EraserIcon /></button>
+            <button className="tool-btn" onClick={() => update({ clearToken: Date.now() })} title="Clear mask"><TrashIcon /></button>
+            <button className="tool-btn" onClick={() => update({ tool: 'off' })} title="Pause painting (lock)">🔒</button>
+            <input type="color" value={ps.color} onChange={e => update({ color: e.target.value })} className="color-input" />
+          </div>
+          <div className="slider-row"><span className="slider-label">Brush: {ps.brushSize}px</span>
+            <input type="range" min="2" max="80" value={ps.brushSize} onChange={e => update({ brushSize: +e.target.value })} /></div>
+          <div className="slider-row"><span className="slider-label">Opacity: {ps.opacity}%</span>
+            <input type="range" min="10" max="90" value={ps.opacity} onChange={e => update({ opacity: +e.target.value })} /></div>
+        </>
+      )}
     </div>
   )
 }
@@ -1271,7 +1252,7 @@ function PaintToolbar() {
 // ═════════════════════════════════════════════════════════════
 // CANVAS EDITOR
 // ═════════════════════════════════════════════════════════════
-function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData, flowStep, cropRect, onTapTarget }) {
+function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData }) {
   const containerRef = useRef()
   const painting = useRef(false)
   const lastPos = useRef({ x: 0, y: 0 })
@@ -1280,29 +1261,20 @@ function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData, flowStep,
   const psRef = useRef(ps)
   useEffect(() => { psRef.current = ps }, [ps])
 
-  // cropRect is in original-image coords. When set, we draw only that region 1:1 into the canvases.
-  const cr = cropRect
-  const drawW = cr ? cr.size : null
-  const drawH = cr ? cr.size : null
-
   useEffect(() => {
     const img = new window.Image()
     img.onload = () => {
       imgObjRef.current = img
-      const w = cr ? cr.size : img.width, h = cr ? cr.size : img.height
-      imgCanvasRef.current.width = w; imgCanvasRef.current.height = h
-      maskCanvasRef.current.width = w; maskCanvasRef.current.height = h
-      const ctx = imgCanvasRef.current.getContext('2d')
-      if (cr) ctx.drawImage(img, cr.x, cr.y, cr.size, cr.size, 0, 0, cr.size, cr.size)
-      else ctx.drawImage(img, 0, 0)
+      imgCanvasRef.current.width = img.width; imgCanvasRef.current.height = img.height
+      maskCanvasRef.current.width = img.width; maskCanvasRef.current.height = img.height
+      imgCanvasRef.current.getContext('2d').drawImage(img, 0, 0)
       fitCanvas()
     }
     img.src = image.url
-  }, [image, cr?.x, cr?.y, cr?.size])
+  }, [image])
 
   useEffect(() => {
-    if (!pennyData || !imgObjRef.current || cr) return
-    // Penny bbox only makes sense when painting on full image (penny is outside the mole crop)
+    if (!pennyData || !imgObjRef.current) return
     const ctx = imgCanvasRef.current.getContext('2d')
     ctx.drawImage(imgObjRef.current, 0, 0)
     const bbox = pennyData.bbox
@@ -1329,10 +1301,8 @@ function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData, flowStep,
   function fitCanvas() {
     const area = containerRef.current?.parentElement; if (!area || !imgObjRef.current) return
     const r = area.getBoundingClientRect()
-    const cw = cr ? cr.size : imgObjRef.current.width
-    const ch = cr ? cr.size : imgObjRef.current.height
-    const s = Math.min((r.width - 40) / cw, (r.height - 40) / ch, 1)
-    const w = Math.round(cw * s) + 'px', h = Math.round(ch * s) + 'px'
+    const s = Math.min((r.width - 40) / imgObjRef.current.width, (r.height - 40) / imgObjRef.current.height, 1)
+    const w = Math.round(imgObjRef.current.width * s) + 'px', h = Math.round(imgObjRef.current.height * s) + 'px'
     for (const el of [containerRef.current, imgCanvasRef.current, maskCanvasRef.current]) { el.style.width = w; el.style.height = h }
   }
 
@@ -1344,6 +1314,7 @@ function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData, flowStep,
 
   function stroke(x1, y1, x2, y2) {
     const p = psRef.current, ctx = maskCanvasRef.current.getContext('2d')
+    if (p.tool === 'off') return
     ctx.save()
     if (p.tool === 'eraser') { ctx.globalCompositeOperation = 'destination-out'; ctx.strokeStyle = ctx.fillStyle = 'rgba(0,0,0,1)' }
     else { ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = ctx.fillStyle = p.color }
@@ -1362,18 +1333,7 @@ function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData, flowStep,
     for (const el of [c, imgCanvasRef.current, maskCanvasRef.current]) { el.style.width = w; el.style.height = h }
   }
 
-  // Tap-target mode — user taps mole location on the full image
-  function handleTapTarget(e) {
-    e.preventDefault()
-    const rect = imgCanvasRef.current.getBoundingClientRect()
-    const cx = e.touches ? e.changedTouches[0].clientX : e.clientX
-    const cy = e.touches ? e.changedTouches[0].clientY : e.clientY
-    const canvasX = (cx - rect.left) * (imgCanvasRef.current.width / rect.width)
-    const canvasY = (cy - rect.top) * (imgCanvasRef.current.height / rect.height)
-    onTapTarget && onTapTarget(canvasX, canvasY, imgObjRef.current.width, imgObjRef.current.height)
-  }
-
-  const inTargetMode = flowStep === 'target'
+  const paintLocked = ps.tool === 'off'
 
   return (
     <>
@@ -1381,22 +1341,13 @@ function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData, flowStep,
         <canvas ref={imgCanvasRef} className="layer-canvas" />
         <canvas ref={maskCanvasRef} className="layer-canvas mask-canvas"
           style={{
-            opacity: inTargetMode ? 0 : (ps.opacity / 100),
-            cursor: inTargetMode ? 'crosshair' : (ps.tool === 'eraser' ? 'cell' : 'crosshair'),
-            pointerEvents: inTargetMode ? 'none' : 'auto',
+            opacity: ps.opacity / 100,
+            cursor: paintLocked ? 'default' : (ps.tool === 'eraser' ? 'cell' : 'crosshair'),
+            pointerEvents: paintLocked ? 'none' : 'auto',
+            touchAction: paintLocked ? 'manipulation' : 'none',
           }}
           onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
           onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp} />
-        {inTargetMode && (
-          <div className="tap-target-overlay"
-            onClick={handleTapTarget} onTouchEnd={handleTapTarget}>
-            <div className="tap-target-hint">
-              <div className="tap-target-ring" />
-              <div className="tap-target-text">Tap the center of your mole</div>
-              <div className="tap-target-sub">We&rsquo;ll zoom in so you can paint precisely</div>
-            </div>
-          </div>
-        )}
       </div>
       <div className="zoom-controls">
         <button onClick={() => zoom(1.25)}>+</button>
