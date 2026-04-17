@@ -720,10 +720,11 @@ export default function App() {
       // Compress image for API calls (keeps under Vercel body size limit)
       const { b64, width, height, url, scaleBack } = await compressImage(file)
       setImage({ filename: file.name, width, height, url, base64: b64, scaleBack: scaleBack || 1 })
-      // Always go straight to paint — start with tool='off' so the user can zoom/pan without accidentally drawing
-      setPaintSettings(prev => ({ ...prev, tool: 'off' }))
+      // Straight to paint — brush is active by default. One-finger drags paint,
+      // two-finger gestures pinch-zoom and pan (handled in CanvasEditor).
+      setPaintSettings(prev => ({ ...prev, tool: 'brush' }))
       setFlowStep('paint')
-      setStatus({ type: 'info', msg: 'Tap "Start Labeling" when ready to paint.' })
+      setStatus({ type: 'success', msg: 'Paint over the mole with one finger. Pinch with two fingers to zoom in.' })
     } catch (e) { setStatus({ type: 'error', msg: e.message }) }
   }
 
@@ -1425,37 +1426,22 @@ function UploadSection({ onUpload }) {
 function PaintToolbar() {
   const { paintSettings: ps, setPaintSettings } = useContext(PaintContext)
   const update = (u) => setPaintSettings(prev => ({ ...prev, ...u }))
-  const locked = ps.tool === 'off'
   return (
     <div className="sidebar-section">
       <h3>Label Your Mole</h3>
-      {locked ? (
-        <>
-          <div className="brush-instructions">
-            <p>Zoom in with <strong>+/−</strong> until the mole is big enough to paint comfortably, then tap <strong>Start Labeling</strong>.</p>
-          </div>
-          <button className="btn btn-primary btn-start-labeling" onClick={() => update({ tool: 'brush' })}>
-            🖌 Start Labeling
-          </button>
-        </>
-      ) : (
-        <>
-          <div className="brush-instructions">
-            <p>Paint over the mole. Use the <strong>eraser</strong> to fix mistakes, or <strong>🔒 Pause</strong> to zoom without drawing.</p>
-          </div>
-          <div className="paint-tools">
-            <button className={`tool-btn ${ps.tool === 'brush' ? 'active' : ''}`} onClick={() => update({ tool: 'brush' })} title="Brush"><BrushIcon /></button>
-            <button className={`tool-btn ${ps.tool === 'eraser' ? 'active' : ''}`} onClick={() => update({ tool: 'eraser' })} title="Eraser"><EraserIcon /></button>
-            <button className="tool-btn" onClick={() => update({ clearToken: Date.now() })} title="Clear mask"><TrashIcon /></button>
-            <button className="tool-btn" onClick={() => update({ tool: 'off' })} title="Pause painting (lock)">🔒</button>
-            <input type="color" value={ps.color} onChange={e => update({ color: e.target.value })} className="color-input" />
-          </div>
-          <div className="slider-row"><span className="slider-label">Brush: {ps.brushSize}px</span>
-            <input type="range" min="2" max="80" value={ps.brushSize} onChange={e => update({ brushSize: +e.target.value })} /></div>
-          <div className="slider-row"><span className="slider-label">Opacity: {ps.opacity}%</span>
-            <input type="range" min="10" max="90" value={ps.opacity} onChange={e => update({ opacity: +e.target.value })} /></div>
-        </>
-      )}
+      <div className="brush-instructions">
+        <p><strong>One finger</strong> paints &middot; <strong>two fingers</strong> pinch-zoom and pan. Use the <strong>eraser</strong> to fix mistakes.</p>
+      </div>
+      <div className="paint-tools">
+        <button className={`tool-btn ${ps.tool === 'brush' ? 'active' : ''}`} onClick={() => update({ tool: 'brush' })} title="Brush"><BrushIcon /></button>
+        <button className={`tool-btn ${ps.tool === 'eraser' ? 'active' : ''}`} onClick={() => update({ tool: 'eraser' })} title="Eraser"><EraserIcon /></button>
+        <button className="tool-btn" onClick={() => update({ clearToken: Date.now() })} title="Clear mask"><TrashIcon /></button>
+        <input type="color" value={ps.color} onChange={e => update({ color: e.target.value })} className="color-input" />
+      </div>
+      <div className="slider-row"><span className="slider-label">Brush: {ps.brushSize}px</span>
+        <input type="range" min="2" max="80" value={ps.brushSize} onChange={e => update({ brushSize: +e.target.value })} /></div>
+      <div className="slider-row"><span className="slider-label">Opacity: {ps.opacity}%</span>
+        <input type="range" min="10" max="90" value={ps.opacity} onChange={e => update({ opacity: +e.target.value })} /></div>
     </div>
   )
 }
@@ -1525,7 +1511,6 @@ function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData }) {
 
   function stroke(x1, y1, x2, y2) {
     const p = psRef.current, ctx = maskCanvasRef.current.getContext('2d')
-    if (p.tool === 'off') return
     ctx.save()
     if (p.tool === 'eraser') { ctx.globalCompositeOperation = 'destination-out'; ctx.strokeStyle = ctx.fillStyle = 'rgba(0,0,0,1)' }
     else { ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = ctx.fillStyle = p.color }
@@ -1535,16 +1520,79 @@ function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData }) {
     ctx.restore()
   }
 
-  function onDown(e) { e.preventDefault(); painting.current = true; const p = getCoords(e); lastPos.current = p; stroke(p.x, p.y, p.x, p.y) }
-  function onMove(e) { e.preventDefault(); if (!painting.current) return; const p = getCoords(e); stroke(lastPos.current.x, lastPos.current.y, p.x, p.y); lastPos.current = p }
-  function onUp() { painting.current = false }
+  // Mouse = always paint
+  function onMouseDown(e) { e.preventDefault(); painting.current = true; const p = getCoords(e); lastPos.current = p; stroke(p.x, p.y, p.x, p.y) }
+  function onMouseMove(e) { e.preventDefault(); if (!painting.current) return; const p = getCoords(e); stroke(lastPos.current.x, lastPos.current.y, p.x, p.y); lastPos.current = p }
+  function onMouseUp() { painting.current = false }
+
+  // Touch: 1 finger = paint, 2 fingers = pinch-zoom + pan
+  const gestureRef = useRef({ mode: 'idle', startDist: 0, startWidth: 0, startLeft: 0, startTop: 0, startCenter: { x: 0, y: 0 } })
+  function touchDist(t0, t1) { const dx = t0.clientX - t1.clientX, dy = t0.clientY - t1.clientY; return Math.sqrt(dx*dx + dy*dy) }
+  function touchMid(t0, t1) { return { x: (t0.clientX + t1.clientX) / 2, y: (t0.clientY + t1.clientY) / 2 } }
+
+  function onTouchStart(e) {
+    e.preventDefault()
+    if (e.touches.length === 1) {
+      gestureRef.current.mode = 'paint'
+      painting.current = true
+      const p = getCoords(e); lastPos.current = p; stroke(p.x, p.y, p.x, p.y)
+    } else if (e.touches.length === 2) {
+      // Starting a pinch — abandon any in-progress paint stroke
+      painting.current = false
+      const c = containerRef.current
+      const rect = c.getBoundingClientRect()
+      gestureRef.current.mode = 'pinch'
+      gestureRef.current.startDist = touchDist(e.touches[0], e.touches[1])
+      gestureRef.current.startWidth = parseFloat(c.style.width) || rect.width
+      gestureRef.current.startLeft = rect.left
+      gestureRef.current.startTop = rect.top
+      gestureRef.current.startCenter = touchMid(e.touches[0], e.touches[1])
+    }
+  }
+  function onTouchMove(e) {
+    e.preventDefault()
+    if (gestureRef.current.mode === 'paint' && e.touches.length === 1 && painting.current) {
+      const p = getCoords(e); stroke(lastPos.current.x, lastPos.current.y, p.x, p.y); lastPos.current = p
+      return
+    }
+    if (gestureRef.current.mode === 'pinch' && e.touches.length === 2) {
+      const c = containerRef.current
+      const dist = touchDist(e.touches[0], e.touches[1])
+      const scale = dist / gestureRef.current.startDist
+      const newWidth = Math.max(100, gestureRef.current.startWidth * scale)
+      const ratio = imgObjRef.current.height / imgObjRef.current.width
+      const newHeight = newWidth * ratio
+      for (const el of [c, imgCanvasRef.current, maskCanvasRef.current]) {
+        el.style.width = newWidth + 'px'
+        el.style.height = newHeight + 'px'
+      }
+      // Pan: move the scroll position of the parent to keep the pinch midpoint stable
+      const mid = touchMid(e.touches[0], e.touches[1])
+      const panX = gestureRef.current.startCenter.x - mid.x
+      const panY = gestureRef.current.startCenter.y - mid.y
+      const parent = c.parentElement
+      if (parent) {
+        parent.scrollLeft += panX * 0.3
+        parent.scrollTop += panY * 0.3
+        gestureRef.current.startCenter = mid
+      }
+    }
+  }
+  function onTouchEnd(e) {
+    if (e.touches.length === 0) {
+      gestureRef.current.mode = 'idle'
+      painting.current = false
+    } else if (e.touches.length === 1 && gestureRef.current.mode === 'pinch') {
+      // Lifted one finger mid-pinch — don't start painting with the remaining finger (too error-prone).
+      // Wait for full lift.
+    }
+  }
+
   function zoom(f) {
     const c = containerRef.current
     const w = Math.round(parseInt(c.style.width) * f) + 'px', h = Math.round(parseInt(c.style.height) * f) + 'px'
     for (const el of [c, imgCanvasRef.current, maskCanvasRef.current]) { el.style.width = w; el.style.height = h }
   }
-
-  const paintLocked = ps.tool === 'off'
 
   return (
     <>
@@ -1553,12 +1601,11 @@ function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData }) {
         <canvas ref={maskCanvasRef} className="layer-canvas mask-canvas"
           style={{
             opacity: ps.opacity / 100,
-            cursor: paintLocked ? 'default' : (ps.tool === 'eraser' ? 'cell' : 'crosshair'),
-            pointerEvents: paintLocked ? 'none' : 'auto',
-            touchAction: paintLocked ? 'manipulation' : 'none',
+            cursor: ps.tool === 'eraser' ? 'cell' : 'crosshair',
+            touchAction: 'none',
           }}
-          onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
-          onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp} />
+          onMouseDown={onMouseDown} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
+          onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd} onTouchCancel={onTouchEnd} />
       </div>
       <div className="zoom-controls">
         <button onClick={() => zoom(1.25)}>+</button>
