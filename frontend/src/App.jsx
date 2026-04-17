@@ -523,9 +523,14 @@ export default function App() {
   const [cropImageDataUrl, setCropImageDataUrl] = useState(null)
   const [selectedMole, setSelectedMole] = useState(null)
   const [abcAnalysis, setAbcAnalysis] = useState(null)
-  // Mobile tap-to-crop flow: on phones, user taps the mole first; we crop a window around the tap and paint on the enlarged crop
-  const [labelStep, setLabelStep] = useState('paint') // 'target' | 'paint'
+  // Flow: 'target' (mobile tap-to-crop) → 'paint' → 'name' → 'results'
+  const [flowStep, setFlowStep] = useState('paint')
   const [cropRect, setCropRect] = useState(null) // { x, y, size } in original-image coords
+  // Form state lives here so ResultsPage can read it after detection
+  const [moleName, setMoleName] = useState('')
+  const [moleDate, setMoleDate] = useState(new Date().toISOString().split('T')[0])
+  const [moleNotes, setMoleNotes] = useState('')
+  const [moleAvatarConfig, setMoleAvatarConfig] = useState(() => defaultAvatarConfig('new-mole'))
   const maskCanvasRef = useRef(null)
   const imgCanvasRef = useRef(null)
 
@@ -535,21 +540,32 @@ export default function App() {
     try { const r = await fetch(`${API}/api/moles`); setMoles(await r.json()) } catch {}
   }
 
+  function resetFormState() {
+    setMoleName(''); setMoleNotes(''); setMoleDate(new Date().toISOString().split('T')[0])
+    setMoleAvatarConfig(defaultAvatarConfig('new-mole'))
+    setAbcAnalysis(null)
+  }
+
   function goHome() {
     setPage('home'); setImage(null); setMeasurements(null)
     setPennyData(null); setClassification(null); setCropImageDataUrl(null); setSelectedMole(null)
-    setLabelStep('paint'); setCropRect(null)
+    setFlowStep('paint'); setCropRect(null)
+    resetFormState()
     setStatus({ type: '', msg: '' })
   }
 
-  function startNew() { setSelectedMole(null); setPage('new') }
+  function startNew() { setSelectedMole(null); resetFormState(); setPage('new') }
 
   function startExisting() { setPage('existing') }
 
   function selectMoleAndAnalyze(m) {
     setSelectedMole(m); setImage(null); setMeasurements(null)
     setPennyData(null); setClassification(null); setCropImageDataUrl(null)
-    setLabelStep('paint'); setCropRect(null)
+    setFlowStep('paint'); setCropRect(null)
+    setMoleName(m.name || '')
+    setMoleAvatarConfig(m.avatar_config || defaultAvatarConfig(m.name))
+    setMoleNotes(''); setMoleDate(new Date().toISOString().split('T')[0])
+    setAbcAnalysis(null)
     setStatus({ type: '', msg: '' }); setPage('new')
   }
 
@@ -590,10 +606,10 @@ export default function App() {
       const { b64, width, height, url, scaleBack } = await compressImage(file)
       setImage({ filename: file.name, width, height, url, base64: b64, scaleBack: scaleBack || 1 })
       if (isMobileViewport()) {
-        setLabelStep('target')
+        setFlowStep('target')
         setStatus({ type: 'info', msg: 'Tap the center of your mole to zoom in.' })
       } else {
-        setLabelStep('paint')
+        setFlowStep('paint')
         setStatus({ type: 'success', msg: 'Image loaded. Paint over the mole, then click Detect.' })
       }
     } catch (e) { setStatus({ type: 'error', msg: e.message }) }
@@ -607,7 +623,7 @@ export default function App() {
     const x = Math.max(0, Math.min(Math.round(tapX - size / 2), imgW - size))
     const y = Math.max(0, Math.min(Math.round(tapY - size / 2), imgH - size))
     setCropRect({ x, y, size })
-    setLabelStep('paint')
+    setFlowStep('paint')
     setStatus({ type: 'success', msg: 'Now paint over the mole in the zoomed view.' })
   }
 
@@ -698,15 +714,18 @@ export default function App() {
       } else {
         setStatus({ type: 'success', msg: 'Measurement complete!' })
       }
+      // Advance to full-page results view
+      setFlowStep('results')
     } catch (e) { setStatus({ type: 'error', msg: e.message }) }
   }
 
-  async function handleSave(name, date, notes, avatarConfig) {
+  async function handleSave() {
+    const saveName = moleName || 'Unnamed'
     try {
       await fetch(`${API}/api/moles`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name, date, notes,
+          name: saveName, date: moleDate, notes: moleNotes,
           image_filename: image.filename,
           mask_pixel_count: maskPixelCount,
           measurements,
@@ -715,11 +734,11 @@ export default function App() {
             confidence: classification.confidence,
           } : null,
           crop_image: cropImageDataUrl || null,
-          avatar_config: avatarConfig || null,
+          avatar_config: moleAvatarConfig || null,
           abc_analysis: abcAnalysis || null,
         }),
       })
-      setStatus({ type: 'success', msg: `Saved "${name}"! 🎉` }); loadHistory()
+      setStatus({ type: 'success', msg: `Saved "${saveName}"! 🎉` }); loadHistory()
     } catch (e) { setStatus({ type: 'error', msg: e.message }) }
   }
 
@@ -848,32 +867,52 @@ export default function App() {
           />
         )}
 
-        {page === 'new' && (
+        {page === 'new' && flowStep === 'results' && (
+          <ResultsPage
+            name={moleName} setName={setMoleName}
+            date={moleDate} setDate={setMoleDate}
+            notes={moleNotes} setNotes={setMoleNotes}
+            avatarConfig={moleAvatarConfig} setAvatarConfig={setMoleAvatarConfig}
+            measurements={measurements}
+            classification={classification}
+            analysis={abcAnalysis}
+            cropImageDataUrl={cropImageDataUrl}
+            selectedMole={selectedMole}
+            status={status}
+            onSave={handleSave}
+            onRedo={() => setFlowStep('paint')}
+            onStartOver={goHome}
+          />
+        )}
+
+        {page === 'new' && flowStep !== 'results' && (
           <div className="app-layout">
             <aside className="sidebar">
               <div className="sidebar-section">
                 <button className="btn btn-outline" onClick={goHome}>&larr; Back to Home</button>
               </div>
               <UploadSection onUpload={handleUpload} />
-              {image && labelStep === 'target' && (
+              {image && flowStep === 'target' && (
                 <div className="sidebar-section">
-                  <h3>Step 1 of 2</h3>
+                  <h3>Step 1 of 3</h3>
                   <p style={{ fontSize: '0.85rem', color: '#aaa', lineHeight: 1.5 }}>
                     Tap the <strong style={{ color: '#f9a825' }}>center of your mole</strong> in the photo. We&rsquo;ll zoom in so you can paint it precisely.
                   </p>
                   {status.msg && <div className={`status-bar ${status.type}`}>{status.msg}</div>}
                 </div>
               )}
-              {image && labelStep === 'paint' && (
+              {image && flowStep === 'paint' && (
                 <>
                   <PaintToolbar />
-                  <MoleForm
-                    onDetect={handleDetect} onSave={handleSave}
-                    status={status} measurements={measurements} classification={classification}
-                    cropImageDataUrl={cropImageDataUrl}
-                    selectedMole={selectedMole} onClearSelection={() => setSelectedMole(null)}
-                    analysis={abcAnalysis}
-                  />
+                  <div className="sidebar-section">
+                    <button className="btn btn-primary btn-done-labeling" onClick={handleDetect}>
+                      {status.type === 'loading' ? <><span className="spinner" />{status.msg || 'Analyzing…'}</> : <>✓ Done Labeling</>}
+                    </button>
+                    {status.msg && status.type === 'error' && <div className={`status-bar ${status.type}`} style={{ marginTop: 8 }}>{status.msg}</div>}
+                    <p className="paint-hint-done">
+                      When you&rsquo;re happy with your painted mask, tap Done Labeling. We&rsquo;ll measure, screen, and reveal your mole buddy.
+                    </p>
+                  </div>
                 </>
               )}
             </aside>
@@ -890,7 +929,7 @@ export default function App() {
                   maskCanvasRef={maskCanvasRef}
                   imgCanvasRef={imgCanvasRef}
                   pennyData={pennyData}
-                  labelStep={labelStep}
+                  flowStep={flowStep}
                   cropRect={cropRect}
                   onTapTarget={handleTapTarget}
                 />
@@ -1232,7 +1271,7 @@ function PaintToolbar() {
 // ═════════════════════════════════════════════════════════════
 // CANVAS EDITOR
 // ═════════════════════════════════════════════════════════════
-function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData, labelStep, cropRect, onTapTarget }) {
+function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData, flowStep, cropRect, onTapTarget }) {
   const containerRef = useRef()
   const painting = useRef(false)
   const lastPos = useRef({ x: 0, y: 0 })
@@ -1334,7 +1373,7 @@ function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData, labelStep
     onTapTarget && onTapTarget(canvasX, canvasY, imgObjRef.current.width, imgObjRef.current.height)
   }
 
-  const inTargetMode = labelStep === 'target'
+  const inTargetMode = flowStep === 'target'
 
   return (
     <>
@@ -1369,33 +1408,17 @@ function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData, labelStep
 }
 
 // ═════════════════════════════════════════════════════════════
-// MOLE FORM — fun naming + auto classification results
+// NAME FORM — step 2: name, avatar builder, date, notes, Detect button
 // ═════════════════════════════════════════════════════════════
-function MoleForm({ onDetect, onSave, status, measurements, classification, cropImageDataUrl, selectedMole, onClearSelection, analysis }) {
-  const [name, setName] = useState('')
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0])
-  const [notes, setNotes] = useState('')
+function NameForm({ name, setName, date, setDate, notes, setNotes, avatarConfig, setAvatarConfig, selectedMole, onClearSelection, onBackToPaint, onDetect, status }) {
   const [showBuilder, setShowBuilder] = useState(false)
-  const [avatarConfig, setAvatarConfig] = useState(() => defaultAvatarConfig('new-mole'))
-
-  useEffect(() => {
-    if (selectedMole) {
-      setName(selectedMole.name)
-      if (selectedMole.avatar_config) setAvatarConfig(selectedMole.avatar_config)
-      else setAvatarConfig(defaultAvatarConfig(selectedMole.name))
-    }
-  }, [selectedMole])
-
-  function diamClass(mm) { return mm >= 6 ? 'danger' : mm >= 4 ? 'warn' : 'safe' }
-
-  const growthInfo = selectedMole && measurements && selectedMole.measurements ? (() => {
-    const oldArea = selectedMole.measurements.mole_area_sq_mm, newArea = measurements.mole_area_sq_mm
-    if (!oldArea || oldArea === 0) return null
-    return { oldArea, newArea, pctChange: Math.round(((newArea - oldArea) / oldArea) * 1000) / 10 }
-  })() : null
 
   return (
     <div className="sidebar-section">
+      <div className="step-header">
+        <button type="button" className="step-back" onClick={onBackToPaint}>&larr; Back to labeling</button>
+        <span className="step-tag">Step 2 of 3</span>
+      </div>
       <h3>{selectedMole ? 'Re-measure Existing Mole' : 'Name Your Mole Buddy'}</h3>
       {selectedMole && (
         <div className="remeasure-banner">
@@ -1406,7 +1429,6 @@ function MoleForm({ onDetect, onSave, status, measurements, classification, crop
         </div>
       )}
 
-      {/* Name + avatar builder */}
       <div className="name-section">
         <div className="name-row">
           <button type="button" className="name-avatar-preview" onClick={() => setShowBuilder(s => !s)} title="Customize my mole">
@@ -1432,24 +1454,95 @@ function MoleForm({ onDetect, onSave, status, measurements, classification, crop
       <button className="btn btn-primary" onClick={onDetect}><SearchIcon /> Detect Penny, Measure &amp; Screen</button>
 
       {status.msg && <div className={`status-bar ${status.type}`}>{status.type === 'loading' && <span className="spinner" />}{status.msg}</div>}
+    </div>
+  )
+}
 
-      {measurements && (
-        <>
-          <div className="results-panel">
-            <h4>📏 Measurements</h4>
-            <div className="result-row"><span className="rlabel">Penny area (px)</span><span className="rvalue">{measurements.penny_pixel_area.toLocaleString()}</span></div>
-            <div className="result-row"><span className="rlabel">Mole area (px)</span><span className="rvalue">{measurements.mole_pixel_count.toLocaleString()}</span></div>
-            <div className="result-row"><span className="rlabel">Mole area</span><span className="rvalue">{measurements.mole_area_sq_mm} mm&sup2; ({measurements.mole_area_sq_inches} in&sup2;)</span></div>
-            <div className="result-row"><span className="rlabel">Mole diameter</span><span className={`rvalue ${diamClass(measurements.mole_diameter_mm)}`}>{measurements.mole_diameter_mm} mm ({measurements.mole_diameter_inches} in)</span></div>
+// ═════════════════════════════════════════════════════════════
+// RESULTS PAGE — reveal animation + inline form + ABCDE + actions
+// ═════════════════════════════════════════════════════════════
+function ResultsPage({ name, setName, date, setDate, notes, setNotes, avatarConfig, setAvatarConfig, measurements, classification, analysis, cropImageDataUrl, selectedMole, status, onSave, onRedo, onStartOver }) {
+  const [showBuilder, setShowBuilder] = useState(false)
+  const diamClass = (mm) => mm >= 6 ? 'danger' : mm >= 4 ? 'warn' : 'safe'
+
+  const growthInfo = selectedMole && measurements && selectedMole.measurements ? (() => {
+    const oldArea = selectedMole.measurements.mole_area_sq_mm, newArea = measurements.mole_area_sq_mm
+    if (!oldArea || oldArea === 0) return null
+    return { oldArea, newArea, pctChange: Math.round(((newArea - oldArea) / oldArea) * 1000) / 10 }
+  })() : null
+
+  const isSaved = status?.type === 'success' && status?.msg?.startsWith('Saved')
+  const saveLabel = name || 'Unnamed'
+
+  return (
+    <div className="results-page">
+      {/* BIG REVEAL ANIMATION */}
+      <div className="reveal-stage">
+        <div className="reveal-sparkles">
+          {[...Array(10)].map((_, i) => (
+            <span key={i} className={`sparkle sparkle-${i}`}>✦</span>
+          ))}
+        </div>
+        <div className="reveal-hole">
+          <div className="reveal-dirt">
+            {[...Array(8)].map((_, i) => <span key={i} className={`dirt-bit dirt-bit-${i}`} />)}
           </div>
+          <div className="reveal-mole">
+            <MoleAvatar config={avatarConfig} size={140} />
+          </div>
+          <div className="reveal-hole-mouth" />
+        </div>
+        <h2 className="reveal-title">Meet your mole buddy!</h2>
+        <p className="reveal-sub">
+          {classification?.label === 'yes'
+            ? `${name || 'This mole'} has some features worth asking a doctor about.`
+            : `${name || 'Your mole'} is ready for a closer look.`}
+        </p>
+      </div>
 
-          {/* ABC analysis — asymmetry, border, color */}
+      {/* RESULTS GRID */}
+      <div className="results-grid results-grid-3">
+        {/* Column 1: Crop + measurements + classification */}
+        <div className="results-col">
+          {cropImageDataUrl && (
+            <div className="results-crop-card reveal-in">
+              <div className="results-crop-label">Your mole, up close</div>
+              <img src={cropImageDataUrl} alt="Cropped mole" className="results-crop-img" />
+            </div>
+          )}
+
+          {measurements && (
+            <div className="results-panel reveal-in reveal-delay-1">
+              <h4>📏 Measurements</h4>
+              <div className="result-row"><span className="rlabel">Diameter</span><span className={`rvalue ${diamClass(measurements.mole_diameter_mm)}`}>{measurements.mole_diameter_mm} mm</span></div>
+              <div className="result-row"><span className="rlabel">Area</span><span className="rvalue">{measurements.mole_area_sq_mm} mm&sup2;</span></div>
+              <div className="result-row"><span className="rlabel">Painted pixels</span><span className="rvalue">{measurements.mole_pixel_count.toLocaleString()}</span></div>
+              <div className="result-row"><span className="rlabel">Penny reference</span><span className="rvalue">{measurements.penny_pixel_area.toLocaleString()} px</span></div>
+            </div>
+          )}
+
+          {classification && (
+            <div className={`classification-result reveal-in reveal-delay-2 ${classification.label === 'yes' ? 'cls-positive' : 'cls-negative'}`}>
+              <div className="cls-source">🔬 AI Screening &mdash; Stanford MIDAS</div>
+              <div className="cls-header">
+                <MoleAvatar config={avatarConfig} size={40} />
+                <span className="cls-icon">{classification.label === 'yes' ? '⚠' : '✓'}</span>
+                <span className="cls-verdict">{classification.label === 'yes' ? 'Suspicious' : 'Likely Benign'}</span>
+              </div>
+              <div className="cls-confidence">Confidence: <strong>{classification.confidence}%</strong></div>
+              <div className="cls-disclaimer">Not a medical diagnosis.</div>
+            </div>
+          )}
+        </div>
+
+        {/* Column 2: ABCDE + growth */}
+        <div className="results-col">
           {analysis && (
-            <div className="abc-panel">
+            <div className="abc-panel reveal-in reveal-delay-1">
               <h4>🔬 ABCDE Analysis</h4>
-              <p className="abc-intro">How this mole scores on the classic warning signs. Not medical advice.</p>
+              <p className="abc-intro">The classic warning signs. Heuristic &mdash; not medical.</p>
               <AbcRow letter="A" title="Asymmetry" value={`${analysis.asymmetry}%`} level={analysis.asymmetryLevel}
-                hint={analysis.asymmetryLevel === 'low' ? 'Halves look similar — reassuring.' : analysis.asymmetryLevel === 'moderate' ? 'One half differs from the other.' : 'The two halves look very different.'} />
+                hint={analysis.asymmetryLevel === 'low' ? 'Halves look similar.' : analysis.asymmetryLevel === 'moderate' ? 'One half differs somewhat.' : 'The two halves look very different.'} />
               <AbcRow letter="B" title="Border" value={analysis.borderLevel} level={abcLevelToDanger(analysis.borderLevel, { smooth: 'low', irregular: 'moderate', jagged: 'high' })}
                 hint={analysis.borderLevel === 'smooth' ? 'Edges are clean and rounded.' : analysis.borderLevel === 'irregular' ? 'Edges are somewhat uneven.' : 'Edges are jagged or notched.'} />
               <AbcRow letter="C" title="Color" value={analysis.colorLevel} level={abcLevelToDanger(analysis.colorLevel, { uniform: 'low', mixed: 'moderate', variable: 'high' })}
@@ -1460,50 +1553,64 @@ function MoleForm({ onDetect, onSave, status, measurements, classification, crop
                 <AbcRow letter="E" title="Evolving"
                   value={(() => { const g = growthInfo?.pctChange; if (g == null) return '—'; return `${g > 0 ? '+' : ''}${g}%` })()}
                   level={growthInfo?.pctChange >= 20 ? 'high' : (growthInfo?.pctChange ?? 0) > 0 ? 'moderate' : 'low'}
-                  hint={growthInfo?.pctChange >= 20 ? 'Grew more than 20% since last check — please see a doctor.' : growthInfo?.pctChange > 0 ? 'Slight growth since last measurement.' : 'No growth or smaller — good sign.'} />
+                  hint={growthInfo?.pctChange >= 20 ? 'Grew more than 20% — please see a doctor.' : growthInfo?.pctChange > 0 ? 'Slight growth since last time.' : 'No growth or smaller — good sign.'} />
               )}
-              <div className="abc-disclaimer">
-                These scores are heuristic estimates from your painted mask and photo &mdash; they are <strong>not a medical diagnosis</strong>.
-              </div>
-            </div>
-          )}
-
-          {/* Classification result — auto-run, shown inline */}
-          {classification && (
-            <div className={`classification-result ${classification.label === 'yes' ? 'cls-positive' : 'cls-negative'}`}>
-              <div className="cls-source">🔬 AI Screening — 2,000+ dermoscopic samples from the Stanford MIDAS database</div>
-              <div className="cls-header">
-                <MoleAvatar config={avatarConfig} size={44} />
-                <span className="cls-icon">{classification.label === 'yes' ? '⚠' : '✓'}</span>
-                <span className="cls-verdict">{classification.label === 'yes' ? `${name || 'This mole'} looks suspicious` : `${name || 'This mole'} looks benign`}</span>
-              </div>
-              <div className="cls-confidence">Confidence: <strong>{classification.confidence}%</strong></div>
-              {cropImageDataUrl && (
-                <div className="cls-crop-preview">
-                  <img src={cropImageDataUrl} alt="Cropped mole" />
-                  <span className="cls-crop-label">Analyzed region</span>
-                </div>
-              )}
-              <div className="cls-label">{classification.label === 'yes' ? 'This mole shares features with potentially malignant samples. Please consult a dermatologist.' : 'This mole appears similar to benign samples. Continue monitoring for changes.'}</div>
-              <div className="cls-disclaimer">This is not a medical diagnosis. Always consult a qualified dermatologist for clinical evaluation.</div>
+              <div className="abc-disclaimer">Heuristic estimates &mdash; <strong>not a medical diagnosis</strong>.</div>
             </div>
           )}
 
           {growthInfo && (
-            <div className={`growth-alert ${growthInfo.pctChange >= 20 ? 'growth-danger' : growthInfo.pctChange > 0 ? 'growth-warn' : 'growth-ok'}`}>
+            <div className={`growth-alert reveal-in reveal-delay-2 ${growthInfo.pctChange >= 20 ? 'growth-danger' : growthInfo.pctChange > 0 ? 'growth-warn' : 'growth-ok'}`}>
               <div className="growth-header">{growthInfo.pctChange >= 20 ? '⚠ Significant Growth Detected' : growthInfo.pctChange > 0 ? 'Slight Growth' : 'No Growth / Smaller'}</div>
               <div className="growth-detail">{growthInfo.oldArea} mm&sup2; &rarr; {growthInfo.newArea} mm&sup2; ({growthInfo.pctChange > 0 ? '+' : ''}{growthInfo.pctChange}%)</div>
-              {growthInfo.pctChange >= 20 && <div className="growth-warning">This mole has grown more than 20% since last measurement. Please consult a dermatologist.</div>}
+              {growthInfo.pctChange >= 20 && <div className="growth-warning">Grown more than 20% since last measurement. Consult a dermatologist.</div>}
             </div>
           )}
+        </div>
 
-          {/* Share + Save buttons */}
-          <div className="action-row">
-            <ShareButton measurements={measurements} classification={classification} name={name || 'Unnamed'} />
-            <button className="btn btn-success" onClick={() => onSave(name || 'Unnamed', date, notes, avatarConfig)}>💾 Save Record</button>
+        {/* Column 3: Naming form */}
+        <div className="results-col">
+          <div className="results-form reveal-in">
+            <h4>🏷 Name your mole</h4>
+            <div className="name-section">
+              <div className="name-row">
+                <button type="button" className="name-avatar-preview" onClick={() => setShowBuilder(s => !s)} title="Customize my mole">
+                  <MoleAvatar config={avatarConfig} size={56} />
+                </button>
+                <div className="name-input-area">
+                  <div className="field" style={{ marginBottom: 0 }}>
+                    <label>Mole Name</label>
+                    <input value={name} onChange={e => setName(e.target.value)} placeholder="Give it a fun name!" />
+                  </div>
+                </div>
+              </div>
+              <button type="button" className="btn btn-outline btn-customize" onClick={() => setShowBuilder(s => !s)}>
+                {showBuilder ? '✕ Close customizer' : '🎨 Customize My Mole'}
+              </button>
+              {showBuilder && (
+                <AvatarBuilder config={avatarConfig} onChange={setAvatarConfig} onClose={() => setShowBuilder(false)} />
+              )}
+            </div>
+            <div className="field"><label>Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
+            <div className="field"><label>Observations</label><textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Noticed anything about this mole?" /></div>
           </div>
-        </>
+        </div>
+      </div>
+
+      {/* ACTIONS */}
+      <div className="results-actions reveal-in reveal-delay-3">
+        <button className="btn btn-outline" onClick={onRedo}>↩ Redo labeling</button>
+        <ShareButton measurements={measurements} classification={classification} name={saveLabel} />
+        <button className="btn btn-success" onClick={onSave} disabled={isSaved}>
+          {isSaved ? '✓ Saved' : '💾 Save Record'}
+        </button>
+      </div>
+      {isSaved && (
+        <div className="status-bar success" style={{ maxWidth: 500, margin: '12px auto 0' }}>{status.msg}</div>
       )}
+      <div className="results-footer-actions">
+        <button className="link-btn" onClick={onStartOver}>Start a completely new analysis →</button>
+      </div>
     </div>
   )
 }
