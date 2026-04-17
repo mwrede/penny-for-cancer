@@ -878,7 +878,7 @@ export default function App() {
             </>
           ) : (
             <button className="btn-mini btn-signin-header" onClick={() => supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })}>
-              Sign in with Google
+              Sign in with Google to save your detections
             </button>
           )}
         </div>
