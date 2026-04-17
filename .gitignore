@@ -7,3 +7,4 @@ backend/uploads/
 backend/moles.json
 /tmp/
 .DS_Store
+.vercel
