@@ -11,7 +11,7 @@ const RF_PENNY_WORKFLOW = 'penny-area-measurement-pipeline-1776292482637'
 const RF_CLASSIFY_WORKFLOW = 'custom-workflow-11'
 
 async function callRoboflowWorkflow(workflowId, imageBase64) {
-  // Attach the Supabase JWT so the Edge function can rate-limit per user
+  // Attach the Supabase JWT if the user is signed in (helps with per-user rate limiting)
   const { data: { session } } = await supabase.auth.getSession()
   const headers = { 'Content-Type': 'application/json' }
   if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
@@ -24,9 +24,6 @@ async function callRoboflowWorkflow(workflowId, imageBase64) {
   if (resp.status === 429) {
     const body = await resp.json().catch(() => ({}))
     throw new Error(body.error || 'Daily analysis limit reached. Try again tomorrow.')
-  }
-  if (resp.status === 401) {
-    throw new Error('Your session expired. Please sign in again.')
   }
   if (!resp.ok) {
     const text = await resp.text()
@@ -524,6 +521,7 @@ function ShareButton({ measurements, classification, name }) {
 export default function App() {
   const [session, setSession] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
+  const [showSignInPrompt, setShowSignInPrompt] = useState(false)
   const [page, setPage] = useState('home')
   const [image, setImage] = useState(null)
   const [moles, setMoles] = useState([])
@@ -741,7 +739,11 @@ export default function App() {
 
   async function handleSave() {
     const saveName = moleName || 'Unnamed'
-    if (!session?.user?.id) { setStatus({ type: 'error', msg: 'Please sign in first.' }); return }
+    if (!session?.user?.id) {
+      // Not signed in — offer Google login so the record can persist across devices
+      setShowSignInPrompt(true)
+      return
+    }
     const record = {
       user_id: session.user.id,
       name: saveName,
@@ -858,18 +860,7 @@ export default function App() {
     }
   }
 
-  // Auth gate — show login until we have a Supabase session
-  if (authLoading) {
-    return (
-      <div className="app auth-loading">
-        <div className="placeholder" style={{ margin: 'auto', textAlign: 'center' }}>
-          <span className="spinner" style={{ width: 24, height: 24 }} />
-          <p>Loading…</p>
-        </div>
-      </div>
-    )
-  }
-  if (!session) return <Login />
+  // App is always usable — login is optional and prompted only when user tries to save.
 
   return (
     <div className="app">
@@ -880,8 +871,16 @@ export default function App() {
           <p className="header-tagline">Measure moles using a penny for scale</p>
         </div>
         <div className="app-header-user">
-          <span className="header-email" title={session.user.email}>{session.user.email}</span>
-          <button className="btn-mini" onClick={signOut}>Sign out</button>
+          {session ? (
+            <>
+              <span className="header-email" title={session.user.email}>{session.user.email}</span>
+              <button className="btn-mini" onClick={signOut}>Sign out</button>
+            </>
+          ) : (
+            <button className="btn-mini btn-signin-header" onClick={() => supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })}>
+              Sign in with Google
+            </button>
+          )}
         </div>
       </header>
 
@@ -964,7 +963,33 @@ export default function App() {
           </div>
         )}
       </PaintContext.Provider>
+
+      {showSignInPrompt && (
+        <div className="signin-modal-backdrop" onClick={() => setShowSignInPrompt(false)}>
+          <div className="signin-modal" onClick={e => e.stopPropagation()}>
+            <img src="/penny.png" alt="Penny" className="hero-penny" style={{ width: 72, height: 72 }} />
+            <h3>Save your mole buddy?</h3>
+            <p>Sign in with Google to save this measurement and see it from any device. Takes one click &mdash; no password.</p>
+            <button
+              className="btn btn-primary"
+              onClick={() => supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } })}
+            >
+              <GoogleIcon /> Continue with Google
+            </button>
+            <button className="btn btn-outline" onClick={() => setShowSignInPrompt(false)}>Not now</button>
+            <p className="signin-modal-fine">Without signing in, your measurements are only on this device.</p>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+function GoogleIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" style={{ marginRight: 6 }}>
+      <path fill="#4285F4" d="M21.35 11.1H12v3.2h5.35c-.23 1.39-1.63 4.07-5.35 4.07-3.22 0-5.85-2.67-5.85-5.97s2.63-5.97 5.85-5.97c1.83 0 3.06.78 3.76 1.46l2.56-2.47C16.64 4.14 14.52 3.2 12 3.2 6.92 3.2 2.85 7.25 2.85 12.4s4.07 9.2 9.15 9.2c5.27 0 8.76-3.7 8.76-8.92 0-.6-.07-1.05-.16-1.58z"/>
+    </svg>
   )
 }
 

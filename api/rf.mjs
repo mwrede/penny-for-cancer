@@ -1,6 +1,7 @@
 // Vercel Edge Function — proxies Roboflow Workflow calls.
-// Now authenticated: requires a Supabase JWT, enforces a per-user daily limit,
-// and reads the Roboflow API key from an env var (never hardcoded).
+// Works anonymously OR with a Supabase JWT.
+// Rate limit: 20 analyses per UTC day, keyed by user_id (if signed in) or IP (if not).
+// Roboflow API key lives in ROBOFLOW_API_KEY env var.
 
 import { createClient } from '@supabase/supabase-js'
 
@@ -30,6 +31,12 @@ function today() {
   return new Date().toISOString().slice(0, 10) // YYYY-MM-DD in UTC
 }
 
+function clientIp(req) {
+  // Vercel sets x-forwarded-for with the real client IP
+  const fwd = req.headers.get('x-forwarded-for') || ''
+  return fwd.split(',')[0].trim() || 'unknown'
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS })
   if (req.method !== 'POST') return json(405, { error: 'POST only' })
@@ -38,24 +45,22 @@ export default async function handler(req) {
   const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY
   const ROBOFLOW_API_KEY = process.env.ROBOFLOW_API_KEY
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !ROBOFLOW_API_KEY) {
-    return json(500, { error: 'Server not configured. Missing SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, or ROBOFLOW_API_KEY env vars.' })
+    return json(500, { error: 'Server not configured.' })
   }
-
-  // Auth: require a valid Supabase JWT
-  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization')
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return json(401, { error: 'Missing Authorization header. Please sign in.' })
-  }
-  const jwt = authHeader.slice('Bearer '.length)
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
-  const { data: userData, error: userErr } = await supabase.auth.getUser(jwt)
-  if (userErr || !userData?.user) {
-    return json(401, { error: 'Invalid or expired session. Please sign in again.' })
+
+  // Optional auth — rate-limit key is user_id if signed in, else IP
+  let userId = null
+  const authHeader = req.headers.get('authorization') || req.headers.get('Authorization')
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const jwt = authHeader.slice('Bearer '.length)
+    const { data: userData } = await supabase.auth.getUser(jwt)
+    if (userData?.user) userId = userData.user.id
   }
-  const userId = userData.user.id
+  const rateKey = userId ? `u:${userId}` : `ip:${clientIp(req)}`
 
   let body
   try { body = await req.json() } catch { return json(400, { error: 'Invalid JSON' }) }
@@ -63,12 +68,12 @@ export default async function handler(req) {
   if (!workflowId || !imageBase64) return json(400, { error: 'workflowId and imageBase64 required' })
   if (!ALLOWED_WORKFLOWS.has(workflowId)) return json(400, { error: 'Unknown workflow' })
 
-  // Rate limit: 20 per UTC day per user
+  // Rate limit: 20 per UTC day per (user or IP)
   const day = today()
   const { data: existing } = await supabase
-    .from('api_usage')
+    .from('api_usage_anon')
     .select('count')
-    .eq('user_id', userId)
+    .eq('key', rateKey)
     .eq('day', day)
     .maybeSingle()
   const currentCount = existing?.count ?? 0
@@ -99,14 +104,10 @@ export default async function handler(req) {
     return json(502, { error: `Proxy fetch failed: ${e.message}` })
   }
 
-  // Only charge against the rate limit when Roboflow succeeded
   if (rfResp.ok) {
     await supabase
-      .from('api_usage')
-      .upsert(
-        { user_id: userId, day, count: currentCount + 1 },
-        { onConflict: 'user_id,day' }
-      )
+      .from('api_usage_anon')
+      .upsert({ key: rateKey, day, count: currentCount + 1 }, { onConflict: 'key,day' })
   }
 
   const text = await rfResp.text()
