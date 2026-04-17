@@ -10,6 +10,22 @@ const PaintContext = createContext()
 const RF_PENNY_WORKFLOW = 'penny-area-measurement-pipeline-1776292482637'
 const RF_CLASSIFY_WORKFLOW = 'custom-workflow-11'
 
+// ═════════════════════════════════════════════════════════════
+// LOCAL STORAGE (anonymous users) — mirror of the Supabase schema
+// so the home page "Recent Measurements" list works either way.
+// ═════════════════════════════════════════════════════════════
+const LOCAL_MOLES_KEY = 'pfc_moles_anon'
+const isLocalId = (id) => typeof id === 'string' && id.startsWith('local_')
+function genLocalId() {
+  try { return 'local_' + crypto.randomUUID() } catch { return 'local_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) }
+}
+function loadLocalMoles() {
+  try { return JSON.parse(localStorage.getItem(LOCAL_MOLES_KEY) || '[]') } catch { return [] }
+}
+function writeLocalMoles(arr) {
+  try { localStorage.setItem(LOCAL_MOLES_KEY, JSON.stringify(arr)) } catch (e) { console.warn('[local] write failed (quota?)', e) }
+}
+
 async function callRoboflowWorkflow(workflowId, imageBase64) {
   // Attach the Supabase JWT if the user is signed in (helps with per-user rate limiting)
   const { data: { session } } = await supabase.auth.getSession()
@@ -555,13 +571,12 @@ export default function App() {
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
-      if (!session) setMoles([])
     })
     return () => subscription.unsubscribe()
   }, [])
 
-  // Load mole history whenever the user is signed in.
-  useEffect(() => { if (session) loadHistory() }, [session?.user?.id])
+  // Load mole history on mount and whenever auth state changes (signed-in → cloud, signed-out → localStorage).
+  useEffect(() => { loadHistory() }, [session?.user?.id])
 
   // Keep the auto-saved record in sync when the user edits form fields on the results page.
   useEffect(() => {
@@ -585,21 +600,56 @@ export default function App() {
     })
   }, [classification, currentRecordId])
 
-  // If a user signs in AFTER a detection (i.e. clicked "Sign in to save" on the results page),
-  // back-fill the auto-save that couldn't happen earlier.
+  // If a user signs in AFTER a detection, migrate the local record to their Supabase account.
   useEffect(() => {
-    if (session?.user?.id && measurements && !currentRecordId && flowStep === 'results') {
+    if (!session?.user?.id || !measurements || flowStep !== 'results') return
+    // If there's no current record, create one in Supabase.
+    if (!currentRecordId) {
       autoSaveRecord(measurements, abcAnalysis, cropImageDataUrl)
+      return
+    }
+    // If the current record lives in localStorage, migrate it to Supabase.
+    if (isLocalId(currentRecordId)) {
+      const existing = loadLocalMoles().find(m => m.id === currentRecordId)
+      if (!existing) return
+      ;(async () => {
+        const { data, error } = await supabase
+          .from('moles')
+          .insert({
+            user_id: session.user.id,
+            name: existing.name,
+            date: existing.date,
+            notes: existing.notes,
+            measurements: existing.measurements,
+            classification: existing.classification,
+            crop_image: existing.crop_image,
+            avatar_config: existing.avatar_config,
+            abc_analysis: existing.abc_analysis,
+          })
+          .select('id')
+          .single()
+        if (error) { console.warn('[moles] migrate failed', error); return }
+        writeLocalMoles(loadLocalMoles().filter(m => m.id !== currentRecordId))
+        setCurrentRecordId(data.id)
+        loadHistory()
+      })()
     }
   }, [session?.user?.id, flowStep])
 
   async function loadHistory() {
-    const { data, error } = await supabase
-      .from('moles')
-      .select('*')
-      .order('date', { ascending: false })
-    if (error) { console.warn('[moles] load failed', error); return }
-    setMoles(data || [])
+    if (session?.user?.id) {
+      const { data, error } = await supabase
+        .from('moles')
+        .select('*')
+        .order('date', { ascending: false })
+      if (error) { console.warn('[moles] load failed', error); return }
+      setMoles(data || [])
+    } else {
+      // Not signed in — read from localStorage
+      const local = loadLocalMoles()
+      local.sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+      setMoles(local)
+    }
   }
 
   async function signOut() { await supabase.auth.signOut() }
@@ -766,59 +816,82 @@ export default function App() {
       }
       // Advance to full-page results view
       setFlowStep('results')
-      // Auto-save for signed-in users (calcResult since setMeasurements hasn't flushed yet)
-      if (session?.user?.id) {
-        await autoSaveRecord(calcResult, abc, crop?.dataUrl || null)
-      }
+      // Auto-save for everyone — signed-in to Supabase, anonymous to localStorage.
+      // Pass the freshly-computed values directly (state setters haven't flushed yet).
+      await autoSaveRecord(calcResult, abc, crop?.dataUrl || null)
     } catch (e) { setStatus({ type: 'error', msg: e.message }) }
   }
 
-  // Insert the current measurement into Supabase right after detection, so the user
-  // doesn't have to click Save. Redo labeling will delete this row.
+  // Auto-save the current measurement right after detection. Signed-in users hit
+  // Supabase; anonymous users get a localStorage row. Either way, the crop image
+  // is saved with the record so it shows up in the recent-measurements list.
   async function autoSaveRecord(measurementsSnapshot, abcSnapshot, cropSnapshot) {
-    if (!session?.user?.id) return
-    const record = {
-      user_id: session.user.id,
+    const base = {
       name: moleName || 'Unnamed',
       date: moleDate,
       notes: moleNotes,
       measurements: measurementsSnapshot,
       classification: classification ? { label: classification.label, confidence: classification.confidence } : null,
-      crop_image: cropSnapshot,
+      crop_image: cropSnapshot || null,
       avatar_config: moleAvatarConfig || null,
       abc_analysis: abcSnapshot,
     }
-    const { data, error } = await supabase.from('moles').insert(record).select('id').single()
-    if (error) { console.warn('[moles] auto-save failed', error); return }
-    setCurrentRecordId(data?.id || null)
+    if (session?.user?.id) {
+      const { data, error } = await supabase
+        .from('moles')
+        .insert({ ...base, user_id: session.user.id })
+        .select('id')
+        .single()
+      if (error) { console.warn('[moles] auto-save failed', error); return }
+      setCurrentRecordId(data?.id || null)
+    } else {
+      const id = genLocalId()
+      const record = { ...base, id, created_at: new Date().toISOString() }
+      const existing = loadLocalMoles()
+      writeLocalMoles([record, ...existing])
+      setCurrentRecordId(id)
+    }
     loadHistory()
   }
 
-  // Whenever the user edits name/date/notes/avatar/classification after auto-save, sync the row.
+  // Patch an already-saved record with new form values. Branches on local vs cloud.
   async function updateCurrentRecord(patch) {
     if (!currentRecordId) return
-    const { error } = await supabase.from('moles').update(patch).eq('id', currentRecordId)
-    if (error) console.warn('[moles] update failed', error)
-    else loadHistory()
+    if (isLocalId(currentRecordId)) {
+      const updated = loadLocalMoles().map(m => m.id === currentRecordId ? { ...m, ...patch } : m)
+      writeLocalMoles(updated)
+    } else {
+      const { error } = await supabase.from('moles').update(patch).eq('id', currentRecordId)
+      if (error) console.warn('[moles] update failed', error)
+    }
+    loadHistory()
   }
 
-  // Remove the auto-saved record when user clicks Redo labeling
+  // Remove the auto-saved record when user clicks Redo labeling.
   async function discardCurrentRecord() {
     if (!currentRecordId) return
-    await supabase.from('moles').delete().eq('id', currentRecordId)
+    if (isLocalId(currentRecordId)) {
+      writeLocalMoles(loadLocalMoles().filter(m => m.id !== currentRecordId))
+    } else {
+      await supabase.from('moles').delete().eq('id', currentRecordId)
+    }
     setCurrentRecordId(null)
     loadHistory()
   }
 
   async function handleSave() {
-    // Triggered when a logged-out user clicks "Sign in to save"
+    // Only shown to anonymous users as a "Sign in to save across devices" nudge.
     setShowSignInPrompt(true)
   }
 
   async function handleDelete(id) {
     if (!confirm('Delete this mole record? This cannot be undone.')) return
-    const { error } = await supabase.from('moles').delete().eq('id', id)
-    if (error) { console.warn('[moles] delete failed', error); return }
+    if (isLocalId(id)) {
+      writeLocalMoles(loadLocalMoles().filter(m => m.id !== id))
+    } else {
+      const { error } = await supabase.from('moles').delete().eq('id', id)
+      if (error) { console.warn('[moles] delete failed', error); return }
+    }
     loadHistory()
   }
 
