@@ -536,6 +536,7 @@ export default function App() {
   const [cropImageDataUrl, setCropImageDataUrl] = useState(null)
   const [selectedMole, setSelectedMole] = useState(null)
   const [abcAnalysis, setAbcAnalysis] = useState(null)
+  const [currentRecordId, setCurrentRecordId] = useState(null) // set after auto-save so Redo can delete it
   // Flow: 'target' (mobile tap-to-crop) → 'paint' → 'name' → 'results'
   const [flowStep, setFlowStep] = useState('paint')
   const [cropRect, setCropRect] = useState(null) // { x, y, size } in original-image coords
@@ -562,6 +563,36 @@ export default function App() {
   // Load mole history whenever the user is signed in.
   useEffect(() => { if (session) loadHistory() }, [session?.user?.id])
 
+  // Keep the auto-saved record in sync when the user edits form fields on the results page.
+  useEffect(() => {
+    if (!currentRecordId) return
+    const t = setTimeout(() => {
+      updateCurrentRecord({
+        name: moleName || 'Unnamed',
+        date: moleDate,
+        notes: moleNotes,
+        avatar_config: moleAvatarConfig,
+      })
+    }, 500) // debounce
+    return () => clearTimeout(t)
+  }, [moleName, moleDate, moleNotes, moleAvatarConfig, currentRecordId])
+
+  // Persist classification once it lands (arrives ~a second after measurements)
+  useEffect(() => {
+    if (!currentRecordId || !classification) return
+    updateCurrentRecord({
+      classification: { label: classification.label, confidence: classification.confidence },
+    })
+  }, [classification, currentRecordId])
+
+  // If a user signs in AFTER a detection (i.e. clicked "Sign in to save" on the results page),
+  // back-fill the auto-save that couldn't happen earlier.
+  useEffect(() => {
+    if (session?.user?.id && measurements && !currentRecordId && flowStep === 'results') {
+      autoSaveRecord(measurements, abcAnalysis, cropImageDataUrl)
+    }
+  }, [session?.user?.id, flowStep])
+
   async function loadHistory() {
     const { data, error } = await supabase
       .from('moles')
@@ -577,6 +608,7 @@ export default function App() {
     setMoleName(''); setMoleNotes(''); setMoleDate(new Date().toISOString().split('T')[0])
     setMoleAvatarConfig(defaultAvatarConfig('new-mole'))
     setAbcAnalysis(null)
+    setCurrentRecordId(null)
   }
 
   function goHome() {
@@ -734,31 +766,53 @@ export default function App() {
       }
       // Advance to full-page results view
       setFlowStep('results')
+      // Auto-save for signed-in users (calcResult since setMeasurements hasn't flushed yet)
+      if (session?.user?.id) {
+        await autoSaveRecord(calcResult, abc, crop?.dataUrl || null)
+      }
     } catch (e) { setStatus({ type: 'error', msg: e.message }) }
   }
 
-  async function handleSave() {
-    const saveName = moleName || 'Unnamed'
-    if (!session?.user?.id) {
-      // Not signed in — offer Google login so the record can persist across devices
-      setShowSignInPrompt(true)
-      return
-    }
+  // Insert the current measurement into Supabase right after detection, so the user
+  // doesn't have to click Save. Redo labeling will delete this row.
+  async function autoSaveRecord(measurementsSnapshot, abcSnapshot, cropSnapshot) {
+    if (!session?.user?.id) return
     const record = {
       user_id: session.user.id,
-      name: saveName,
+      name: moleName || 'Unnamed',
       date: moleDate,
       notes: moleNotes,
-      measurements,
+      measurements: measurementsSnapshot,
       classification: classification ? { label: classification.label, confidence: classification.confidence } : null,
-      crop_image: cropImageDataUrl || null,
+      crop_image: cropSnapshot,
       avatar_config: moleAvatarConfig || null,
-      abc_analysis: abcAnalysis || null,
+      abc_analysis: abcSnapshot,
     }
-    const { error } = await supabase.from('moles').insert(record)
-    if (error) { setStatus({ type: 'error', msg: error.message }); return }
-    setStatus({ type: 'success', msg: `Saved "${saveName}"! 🎉` })
+    const { data, error } = await supabase.from('moles').insert(record).select('id').single()
+    if (error) { console.warn('[moles] auto-save failed', error); return }
+    setCurrentRecordId(data?.id || null)
     loadHistory()
+  }
+
+  // Whenever the user edits name/date/notes/avatar/classification after auto-save, sync the row.
+  async function updateCurrentRecord(patch) {
+    if (!currentRecordId) return
+    const { error } = await supabase.from('moles').update(patch).eq('id', currentRecordId)
+    if (error) console.warn('[moles] update failed', error)
+    else loadHistory()
+  }
+
+  // Remove the auto-saved record when user clicks Redo labeling
+  async function discardCurrentRecord() {
+    if (!currentRecordId) return
+    await supabase.from('moles').delete().eq('id', currentRecordId)
+    setCurrentRecordId(null)
+    loadHistory()
+  }
+
+  async function handleSave() {
+    // Triggered when a logged-out user clicks "Sign in to save"
+    setShowSignInPrompt(true)
   }
 
   async function handleDelete(id) {
@@ -906,6 +960,9 @@ export default function App() {
 
         {page === 'new' && flowStep === 'results' && (
           <ResultsPage
+            session={session}
+            currentRecordId={currentRecordId}
+            onDiscardRecord={discardCurrentRecord}
             name={moleName} setName={setMoleName}
             date={moleDate} setDate={setMoleDate}
             notes={moleNotes} setNotes={setMoleNotes}
@@ -917,7 +974,7 @@ export default function App() {
             selectedMole={selectedMole}
             status={status}
             onSave={handleSave}
-            onRedo={() => setFlowStep('paint')}
+            onRedo={async () => { await discardCurrentRecord(); setFlowStep('paint') }}
             onStartOver={goHome}
           />
         )}
@@ -1493,7 +1550,7 @@ function NameForm({ name, setName, date, setDate, notes, setNotes, avatarConfig,
 // ═════════════════════════════════════════════════════════════
 // RESULTS PAGE — reveal animation + inline form + ABCDE + actions
 // ═════════════════════════════════════════════════════════════
-function ResultsPage({ name, setName, date, setDate, notes, setNotes, avatarConfig, setAvatarConfig, measurements, classification, analysis, cropImageDataUrl, selectedMole, status, onSave, onRedo, onStartOver }) {
+function ResultsPage({ name, setName, date, setDate, notes, setNotes, avatarConfig, setAvatarConfig, measurements, classification, analysis, cropImageDataUrl, selectedMole, status, onSave, onRedo, onStartOver, session, currentRecordId }) {
   const [showBuilder, setShowBuilder] = useState(false)
   const diamClass = (mm) => mm >= 6 ? 'danger' : mm >= 4 ? 'warn' : 'safe'
 
@@ -1630,12 +1687,20 @@ function ResultsPage({ name, setName, date, setDate, notes, setNotes, avatarConf
       <div className="results-actions reveal-in reveal-delay-3">
         <button className="btn btn-outline" onClick={onRedo}>↩ Redo labeling</button>
         <ShareButton measurements={measurements} classification={classification} name={saveLabel} />
-        <button className="btn btn-success" onClick={onSave} disabled={isSaved}>
-          {isSaved ? '✓ Saved' : '💾 Save Record'}
-        </button>
+        {session ? (
+          <button className="btn btn-success" disabled>
+            {currentRecordId ? '✓ Saved automatically' : 'Saving…'}
+          </button>
+        ) : (
+          <button className="btn btn-primary btn-signin-save" onClick={onSave}>
+            <GoogleIcon /> Sign in to save
+          </button>
+        )}
       </div>
-      {isSaved && (
-        <div className="status-bar success" style={{ maxWidth: 500, margin: '12px auto 0' }}>{status.msg}</div>
+      {session && currentRecordId && (
+        <div className="status-bar success" style={{ maxWidth: 500, margin: '12px auto 0' }}>
+          Saved to your account. Click "Redo labeling" to discard and start over.
+        </div>
       )}
       <div className="results-footer-actions">
         <button className="link-btn" onClick={onStartOver}>Start a completely new analysis →</button>

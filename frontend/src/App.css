@@ -663,6 +663,13 @@ body {
 }
 .btn-signin-header:hover { opacity: 0.9; color: #fff; border-color: transparent; }
 
+.btn-signin-save {
+  background: #fff; color: #1a1a1a;
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 6px; font-weight: 700;
+}
+.btn-signin-save:hover { background: #f1f1f1; opacity: 1; color: #1a1a1a; }
+
 /* ═══ LOGIN PAGE ═══ */
 .login-page {
   min-height: 100vh; display: flex; flex-direction: column;
