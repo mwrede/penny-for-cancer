@@ -660,11 +660,11 @@ body {
 
 /* ═══ REVEAL ANIMATION — mole popping out of a hole ═══ */
 .reveal-stage {
-  position: relative; padding: 40px 20px 24px;
+  position: relative; padding: 180px 20px 24px;
   display: flex; flex-direction: column; align-items: center;
   margin-bottom: 20px;
   background: radial-gradient(ellipse at center top, rgba(249,168,37,0.06) 0%, transparent 70%);
-  overflow: hidden;
+  overflow: visible;
 }
 
 .reveal-hole {
@@ -927,7 +927,7 @@ body {
   .results-name { font-size: 1.1rem; }
   .results-grid, .results-grid-3 { grid-template-columns: 1fr; gap: 14px; }
   .results-actions { flex-direction: column; }
-  .reveal-stage { padding: 28px 14px 18px; }
+  .reveal-stage { padding: 140px 14px 18px; }
   .reveal-title { font-size: 1.4rem; margin-top: 28px; }
   .reveal-sub { font-size: 0.82rem; }
   .reveal-hole { width: 200px; height: 66px; }
