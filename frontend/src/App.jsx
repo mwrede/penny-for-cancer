@@ -1776,31 +1776,54 @@ function ResultsPage({ name, setName, date, setDate, notes, setNotes, avatarConf
           )}
         </div>
 
-        {/* Column 3: Naming form */}
+        {/* Column 3: Naming form (new mole) or just date/notes (re-measure) */}
         <div className="results-col">
           <div className="results-form reveal-in">
-            <h4>🏷 Name your mole</h4>
-            <div className="name-section">
-              <div className="name-row">
-                <button type="button" className="name-avatar-preview" onClick={() => setShowBuilder(s => !s)} title="Customize my mole">
-                  <MoleAvatar config={avatarConfig} size={56} />
-                </button>
-                <div className="name-input-area">
-                  <div className="field" style={{ marginBottom: 0 }}>
-                    <label>Mole Name</label>
-                    <input value={name} onChange={e => setName(e.target.value)} placeholder="Give it a fun name!" />
+            {selectedMole ? (
+              <>
+                <h4>📋 Re-measurement</h4>
+                <div className="remeasure-banner" style={{ marginBottom: 14 }}>
+                  <div className="name-row" style={{ marginBottom: 0 }}>
+                    <div className="name-avatar-preview" style={{ cursor: 'default' }}>
+                      <MoleAvatar config={avatarConfig} size={44} />
+                    </div>
+                    <div className="name-input-area">
+                      <div className="remeasure-info" style={{ margin: 0 }}>
+                        <strong>{name || selectedMole.name}</strong>
+                        <br/><span className="remeasure-prev">First seen {selectedMole.date}</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <button type="button" className="btn btn-outline btn-customize" onClick={() => setShowBuilder(s => !s)}>
-                {showBuilder ? '✕ Close customizer' : '🎨 Customize My Mole'}
-              </button>
-              {showBuilder && (
-                <AvatarBuilder config={avatarConfig} onChange={setAvatarConfig} onClose={() => setShowBuilder(false)} />
-              )}
-            </div>
-            <div className="field"><label>Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
-            <div className="field"><label>Observations</label><textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Noticed anything about this mole?" /></div>
+                <div className="field"><label>Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
+                <div className="field"><label>Observations</label><textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any changes since last time?" /></div>
+              </>
+            ) : (
+              <>
+                <h4>🏷 Name your mole</h4>
+                <div className="name-section">
+                  <div className="name-row">
+                    <button type="button" className="name-avatar-preview" onClick={() => setShowBuilder(s => !s)} title="Customize my mole">
+                      <MoleAvatar config={avatarConfig} size={56} />
+                    </button>
+                    <div className="name-input-area">
+                      <div className="field" style={{ marginBottom: 0 }}>
+                        <label>Mole Name</label>
+                        <input value={name} onChange={e => setName(e.target.value)} placeholder="Give it a fun name!" />
+                      </div>
+                    </div>
+                  </div>
+                  <button type="button" className="btn btn-outline btn-customize" onClick={() => setShowBuilder(s => !s)}>
+                    {showBuilder ? '✕ Close customizer' : '🎨 Customize My Mole'}
+                  </button>
+                  {showBuilder && (
+                    <AvatarBuilder config={avatarConfig} onChange={setAvatarConfig} onClose={() => setShowBuilder(false)} />
+                  )}
+                </div>
+                <div className="field"><label>Date</label><input type="date" value={date} onChange={e => setDate(e.target.value)} /></div>
+                <div className="field"><label>Observations</label><textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Noticed anything about this mole?" /></div>
+              </>
+            )}
           </div>
         </div>
       </div>
