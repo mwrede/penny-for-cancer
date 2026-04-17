@@ -1,2 +1,0 @@
-# No external dependencies needed for Vercel serverless functions
-# All API calls use stdlib urllib, image parsing uses struct

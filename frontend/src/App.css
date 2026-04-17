@@ -632,6 +632,69 @@ body {
 }
 .home-section .empty-state .muted { display: block; margin-bottom: 4px; }
 
+/* ═══ LOGIN PAGE ═══ */
+.login-page {
+  min-height: 100vh; display: flex; flex-direction: column;
+  background: #0f0f13;
+}
+.login-main {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 40px 20px;
+}
+.login-card {
+  background: #13131a; border: 1px solid #2a2a4a; border-radius: 18px;
+  padding: 40px 32px; max-width: 460px; width: 100%; text-align: center;
+}
+.login-card h2 {
+  font-size: 1.5rem; color: #f9a825; margin: 16px 0 8px;
+}
+.login-sub {
+  font-size: 0.92rem; color: #aaa; line-height: 1.5; margin-bottom: 24px;
+}
+.login-form {
+  display: flex; flex-direction: column; gap: 10px; text-align: left;
+}
+.login-form label {
+  font-size: 0.72rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.login-form input {
+  background: #1e1e2e; border: 1px solid #3a3a5a; border-radius: 10px;
+  padding: 12px 14px; color: #e0e0e0; font-size: 1rem; outline: none;
+  font-family: inherit; transition: border 0.2s;
+}
+.login-form input:focus { border-color: #4fc3f7; }
+.turnstile-widget { min-height: 0; display: flex; justify-content: center; }
+.login-form .btn { margin-top: 4px; }
+.login-sent { padding: 10px 0; }
+.login-sent-icon { font-size: 3rem; margin-bottom: 12px; }
+.login-sent p { color: #ccc; margin-bottom: 16px; line-height: 1.5; }
+.login-footnote {
+  margin-top: 20px; padding-top: 16px; border-top: 1px solid #2a2a4a;
+  font-size: 0.72rem; color: #666; line-height: 1.5;
+}
+
+/* Auth loading screen */
+.auth-loading { display: flex; align-items: center; justify-content: center; }
+
+/* Header: signed-in user area */
+.app-header-user {
+  display: flex; align-items: center; gap: 10px; margin-left: auto;
+  font-size: 0.78rem; color: #aaa;
+}
+.header-email {
+  max-width: 200px; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Powered by Roboflow */
+.powered-by {
+  margin-top: 8px; font-size: 0.72rem; color: #666;
+}
+.powered-by a {
+  color: #a78bfa; text-decoration: none; font-weight: 600;
+}
+.powered-by a:hover { color: #c9a9ff; text-decoration: underline; }
+
 /* ═══ STEP HEADER (name step) ═══ */
 .step-header {
   display: flex; justify-content: space-between; align-items: center;
@@ -964,6 +1027,15 @@ body {
 
   /* ABCDE cards - better mobile stacking */
   .abcde-grid { grid-template-columns: 1fr; }
+
+  /* Login page on mobile */
+  .login-card { padding: 28px 22px; }
+  .login-card h2 { font-size: 1.25rem; }
+
+  /* Header signed-in area on mobile */
+  .app-header { flex-wrap: wrap; padding: 10px 12px; }
+  .app-header-user { margin-left: 0; width: 100%; justify-content: flex-end; padding-top: 4px; }
+  .header-email { max-width: 140px; font-size: 0.72rem; }
 
   /* Results page on mobile */
   .results-page { padding: 14px; }

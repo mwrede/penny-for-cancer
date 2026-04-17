@@ -1,7 +1,12 @@
 node_modules/
 dist/
 .env
+.env.local
+.env.*.local
+frontend/.env.local
+frontend/.env
 *.pyc
+
 __pycache__/
 backend/uploads/
 backend/moles.json

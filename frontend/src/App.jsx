@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, createContext, useContext, useMemo } from 'react'
 import './App.css'
+import { supabase, supabaseConfigured } from './lib/supabase'
+import Login from './pages/Login'
 
-const API = ''
 const PaintContext = createContext()
 
 // Roboflow config — calls go through /api/rf Edge function proxy
@@ -10,11 +11,23 @@ const RF_PENNY_WORKFLOW = 'penny-area-measurement-pipeline-1776292482637'
 const RF_CLASSIFY_WORKFLOW = 'custom-workflow-11'
 
 async function callRoboflowWorkflow(workflowId, imageBase64) {
+  // Attach the Supabase JWT so the Edge function can rate-limit per user
+  const { data: { session } } = await supabase.auth.getSession()
+  const headers = { 'Content-Type': 'application/json' }
+  if (session?.access_token) headers['Authorization'] = `Bearer ${session.access_token}`
+
   const resp = await fetch('/api/rf', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({ workflowId, imageBase64 }),
   })
+  if (resp.status === 429) {
+    const body = await resp.json().catch(() => ({}))
+    throw new Error(body.error || 'Daily analysis limit reached. Try again tomorrow.')
+  }
+  if (resp.status === 401) {
+    throw new Error('Your session expired. Please sign in again.')
+  }
   if (!resp.ok) {
     const text = await resp.text()
     throw new Error(`Roboflow proxy error ${resp.status}: ${text}`)
@@ -509,6 +522,8 @@ function ShareButton({ measurements, classification, name }) {
 // MAIN APP — page router: 'home' | 'new' | 'existing'
 // ═════════════════════════════════════════════════════════════
 export default function App() {
+  const [session, setSession] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [page, setPage] = useState('home')
   const [image, setImage] = useState(null)
   const [moles, setMoles] = useState([])
@@ -534,11 +549,31 @@ export default function App() {
   const maskCanvasRef = useRef(null)
   const imgCanvasRef = useRef(null)
 
-  useEffect(() => { loadHistory() }, [])
+  // Subscribe to auth state — load the current session, then react to sign-in / sign-out / token refresh.
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session); setAuthLoading(false)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+      if (!session) setMoles([])
+    })
+    return () => subscription.unsubscribe()
+  }, [])
+
+  // Load mole history whenever the user is signed in.
+  useEffect(() => { if (session) loadHistory() }, [session?.user?.id])
 
   async function loadHistory() {
-    try { const r = await fetch(`${API}/api/moles`); setMoles(await r.json()) } catch {}
+    const { data, error } = await supabase
+      .from('moles')
+      .select('*')
+      .order('date', { ascending: false })
+    if (error) { console.warn('[moles] load failed', error); return }
+    setMoles(data || [])
   }
+
+  async function signOut() { await supabase.auth.signOut() }
 
   function resetFormState() {
     setMoleName(''); setMoleNotes(''); setMoleDate(new Date().toISOString().split('T')[0])
@@ -706,30 +741,29 @@ export default function App() {
 
   async function handleSave() {
     const saveName = moleName || 'Unnamed'
-    try {
-      await fetch(`${API}/api/moles`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: saveName, date: moleDate, notes: moleNotes,
-          image_filename: image.filename,
-          mask_pixel_count: maskPixelCount,
-          measurements,
-          classification: classification ? {
-            label: classification.label,
-            confidence: classification.confidence,
-          } : null,
-          crop_image: cropImageDataUrl || null,
-          avatar_config: moleAvatarConfig || null,
-          abc_analysis: abcAnalysis || null,
-        }),
-      })
-      setStatus({ type: 'success', msg: `Saved "${saveName}"! 🎉` }); loadHistory()
-    } catch (e) { setStatus({ type: 'error', msg: e.message }) }
+    if (!session?.user?.id) { setStatus({ type: 'error', msg: 'Please sign in first.' }); return }
+    const record = {
+      user_id: session.user.id,
+      name: saveName,
+      date: moleDate,
+      notes: moleNotes,
+      measurements,
+      classification: classification ? { label: classification.label, confidence: classification.confidence } : null,
+      crop_image: cropImageDataUrl || null,
+      avatar_config: moleAvatarConfig || null,
+      abc_analysis: abcAnalysis || null,
+    }
+    const { error } = await supabase.from('moles').insert(record)
+    if (error) { setStatus({ type: 'error', msg: error.message }); return }
+    setStatus({ type: 'success', msg: `Saved "${saveName}"! 🎉` })
+    loadHistory()
   }
 
   async function handleDelete(id) {
     if (!confirm('Delete this mole record? This cannot be undone.')) return
-    await fetch(`${API}/api/moles?id=${id}`, { method: 'DELETE' }); loadHistory()
+    const { error } = await supabase.from('moles').delete().eq('id', id)
+    if (error) { console.warn('[moles] delete failed', error); return }
+    loadHistory()
   }
 
   function countMaskPixels() {
@@ -824,12 +858,31 @@ export default function App() {
     }
   }
 
+  // Auth gate — show login until we have a Supabase session
+  if (authLoading) {
+    return (
+      <div className="app auth-loading">
+        <div className="placeholder" style={{ margin: 'auto', textAlign: 'center' }}>
+          <span className="spinner" style={{ width: 24, height: 24 }} />
+          <p>Loading…</p>
+        </div>
+      </div>
+    )
+  }
+  if (!session) return <Login />
+
   return (
     <div className="app">
-      <header className="app-header" onClick={goHome} style={{ cursor: 'pointer' }}>
-        <img src="/penny.png" alt="Penny" className="header-penny" />
-        <h1>A Penny <span>For Cancer</span></h1>
-        <p className="header-tagline">Measure moles using a penny for scale</p>
+      <header className="app-header">
+        <div className="app-header-main" onClick={goHome} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+          <img src="/penny.png" alt="Penny" className="header-penny" />
+          <h1>A Penny <span>For Cancer</span></h1>
+          <p className="header-tagline">Measure moles using a penny for scale</p>
+        </div>
+        <div className="app-header-user">
+          <span className="header-email" title={session.user.email}>{session.user.email}</span>
+          <button className="btn-mini" onClick={signOut}>Sign out</button>
+        </div>
       </header>
 
       <PaintContext.Provider value={{ paintSettings, setPaintSettings }}>
@@ -1043,6 +1096,9 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
 
       <footer className="home-footer">
         <p>Not a medical device. Always consult a qualified dermatologist for clinical evaluation.</p>
+        <p className="powered-by">
+          Powered by <a href="https://roboflow.com" target="_blank" rel="noopener noreferrer">Roboflow</a>
+        </p>
       </footer>
     </div>
   )
