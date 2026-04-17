@@ -898,6 +898,10 @@ body {
   font-size: 0.78rem; color: #aaa; line-height: 1.4;
   letter-spacing: 0.2px;
 }
+.reveal-verdict-source a {
+  color: #a78bfa; text-decoration: none; font-weight: 600;
+}
+.reveal-verdict-source a:hover { color: #c9a9ff; text-decoration: underline; }
 
 .reveal-sub {
   font-size: 0.88rem; color: #888; text-align: center; max-width: 520px;

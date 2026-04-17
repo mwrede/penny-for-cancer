@@ -476,7 +476,7 @@ function ShareButton({ measurements, classification, name }) {
       `Mole: ${name || 'Unnamed'}`,
       ms.mole_diameter_mm ? `Diameter: ${ms.mole_diameter_mm} mm` : '',
       ms.mole_area_sq_mm ? `Area: ${ms.mole_area_sq_mm} mm²` : '',
-      classification ? `AI Comparison with 2,000 Real examples: ${classification.label === 'yes' ? '⚠️ Suspicious' : '✅ Likely Benign'} (${classification.confidence}% confidence)` : '',
+      classification ? `AI Comparison against Stanford MRA-MIDAS (https://stanfordaimi.azurewebsites.net/datasets/f4c2020f-801a-42dd-a477-a1a8357ef2a5): ${classification.label === 'yes' ? '⚠️ Suspicious' : '✅ Likely Benign'} (${classification.confidence}% confidence)` : '',
       ``,
       classification?.label === 'yes'
         ? `⚠️ This mole was flagged as suspicious when compared against 2,000+ dermoscopic samples from the Stanford MIDAS database. Please consider consulting a dermatologist.`
@@ -1707,7 +1707,9 @@ function ResultsPage({ name, setName, date, setDate, notes, setNotes, avatarConf
             <div className="reveal-verdict-icon">{classification.label === 'yes' ? '⚠️' : '✅'}</div>
             <div className="reveal-verdict-main">
               <div className="reveal-verdict-label">{classification.label === 'yes' ? `${name || 'This mole'} looks suspicious` : `${name || 'This mole'} looks likely benign`}</div>
-              <div className="reveal-verdict-source">AI Comparison with 2,000 Real examples &middot; {classification.confidence}% confidence</div>
+              <div className="reveal-verdict-source">
+                AI Comparison against <a href="https://stanfordaimi.azurewebsites.net/datasets/f4c2020f-801a-42dd-a477-a1a8357ef2a5" target="_blank" rel="noopener noreferrer">Stanford MRA-MIDAS</a> &middot; {classification.confidence}% confidence
+              </div>
             </div>
           </div>
         )}
