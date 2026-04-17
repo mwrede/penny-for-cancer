@@ -450,7 +450,7 @@ function ShareButton({ measurements, classification, name }) {
       `Mole: ${name || 'Unnamed'}`,
       ms.mole_diameter_mm ? `Diameter: ${ms.mole_diameter_mm} mm` : '',
       ms.mole_area_sq_mm ? `Area: ${ms.mole_area_sq_mm} mm²` : '',
-      classification ? `AI Comparison with 2,000 Real Examples of Cancer and False Positives: ${classification.label === 'yes' ? '⚠️ Suspicious' : '✅ Likely Benign'} (${classification.confidence}% confidence)` : '',
+      classification ? `AI Comparison with 2,000 Real examples: ${classification.label === 'yes' ? '⚠️ Suspicious' : '✅ Likely Benign'} (${classification.confidence}% confidence)` : '',
       ``,
       classification?.label === 'yes'
         ? `⚠️ This mole was flagged as suspicious when compared against 2,000+ dermoscopic samples from the Stanford MIDAS database. Please consider consulting a dermatologist.`
@@ -1493,10 +1493,19 @@ function ResultsPage({ name, setName, date, setDate, notes, setNotes, avatarConf
           <div className="reveal-hole-mouth" />
         </div>
         <h2 className="reveal-title">Meet your mole buddy!</h2>
+        {classification && (
+          <div className={`reveal-verdict ${classification.label === 'yes' ? 'cls-positive' : 'cls-negative'}`}>
+            <div className="reveal-verdict-icon">{classification.label === 'yes' ? '⚠️' : '✅'}</div>
+            <div className="reveal-verdict-main">
+              <div className="reveal-verdict-label">{classification.label === 'yes' ? `${name || 'This mole'} looks suspicious` : `${name || 'This mole'} looks likely benign`}</div>
+              <div className="reveal-verdict-source">AI Comparison with 2,000 Real examples &middot; {classification.confidence}% confidence</div>
+            </div>
+          </div>
+        )}
         <p className="reveal-sub">
           {classification?.label === 'yes'
-            ? `${name || 'This mole'} has some features worth asking a doctor about.`
-            : `${name || 'Your mole'} is ready for a closer look.`}
+            ? 'Some features are worth asking a doctor about. Not a diagnosis.'
+            : 'Matches common benign samples. Keep monitoring for changes. Not a diagnosis.'}
         </p>
       </div>
 
@@ -1521,18 +1530,6 @@ function ResultsPage({ name, setName, date, setDate, notes, setNotes, avatarConf
             </div>
           )}
 
-          {classification && (
-            <div className={`classification-result reveal-in reveal-delay-2 ${classification.label === 'yes' ? 'cls-positive' : 'cls-negative'}`}>
-              <div className="cls-source">🔬 AI Comparison with 2,000 Real Examples of Cancer and False Positives</div>
-              <div className="cls-header">
-                <MoleAvatar config={avatarConfig} size={40} />
-                <span className="cls-icon">{classification.label === 'yes' ? '⚠' : '✓'}</span>
-                <span className="cls-verdict">{classification.label === 'yes' ? 'Suspicious' : 'Likely Benign'}</span>
-              </div>
-              <div className="cls-confidence">Confidence: <strong>{classification.confidence}%</strong></div>
-              <div className="cls-disclaimer">Not a medical diagnosis.</div>
-            </div>
-          )}
         </div>
 
         {/* Column 2: ABCDE + growth */}
