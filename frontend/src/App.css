@@ -38,6 +38,18 @@ body {
   max-width: 640px; margin: 0 auto; font-size: 1rem;
   color: #aaa; line-height: 1.6;
 }
+.hero-subtitle.mission {
+  font-size: 1.08rem; color: #ccc; font-style: italic;
+  margin-bottom: 10px;
+}
+.hero-disclaimer {
+  max-width: 580px; margin: 18px auto 0; padding: 12px 18px;
+  background: rgba(249,168,37,0.08); border: 1px solid rgba(249,168,37,0.2);
+  border-radius: 12px; display: flex; align-items: flex-start; gap: 10px;
+  font-size: 0.84rem; color: #bbb; line-height: 1.5; text-align: left;
+}
+.hero-disclaimer svg { flex-shrink: 0; color: #f9a825; margin-top: 1px; }
+.hero-disclaimer strong { color: #f9a825; }
 
 /* Action buttons */
 .home-actions {

@@ -4,25 +4,20 @@ import './App.css'
 const API = ''
 const PaintContext = createContext()
 
-// Roboflow config — calls made directly from browser to avoid Cloudflare blocking serverless IPs
-const RF_API_KEY = 'jIlsPhHeCYPv0LCOooQT'
-const RF_WORKSPACE = 'michael-h89ju'
+// Roboflow config — calls go through /api/rf Edge function proxy
+// (serverless.roboflow.com has no CORS headers; Python serverless hit Cloudflare 1010 block)
 const RF_PENNY_WORKFLOW = 'penny-area-measurement-pipeline-1776292482637'
 const RF_CLASSIFY_WORKFLOW = 'custom-workflow-11'
 
 async function callRoboflowWorkflow(workflowId, imageBase64) {
-  const url = `https://serverless.roboflow.com/${RF_WORKSPACE}/workflows/${workflowId}`
-  const resp = await fetch(url, {
+  const resp = await fetch('/api/rf', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      api_key: RF_API_KEY,
-      inputs: { image: { type: 'base64', value: imageBase64 } }
-    })
+    body: JSON.stringify({ workflowId, imageBase64 }),
   })
   if (!resp.ok) {
     const text = await resp.text()
-    throw new Error(`Roboflow error ${resp.status}: ${text}`)
+    throw new Error(`Roboflow proxy error ${resp.status}: ${text}`)
   }
   const data = await resp.json()
   return data.outputs || data
@@ -435,9 +430,8 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
           <img src="/penny.png" alt="Penny" className="hero-penny" />
         </div>
         <h2>Welcome to A Penny For Cancer</h2>
-        <p className="hero-subtitle">
-          A free tool to help you measure and monitor moles on your skin using nothing more than a photo and a US penny.
-          Early detection saves lives &mdash; track your moles, spot changes, and know when to see a dermatologist.
+        <p className="hero-subtitle mission">
+          The penny is dead, and of those still out there, some 60% of actively circulating coins go unused, so to my small denominated friend, I&rsquo;ve decided to have a penny solve cancer. Penny will be used to measure the mole, and track the mole, but guys, this is a silly app, 1s and 0s on a page. <strong>Seek medical advice for any mole if you are concerned.</strong> Hope this is helpful!
         </p>
       </section>
 
