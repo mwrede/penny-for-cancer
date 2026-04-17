@@ -39,6 +39,8 @@ class handler(BaseHTTPRequestHandler):
             "measurements": data.get("measurements"),
             "classification": data.get("classification"),
             "crop_image": data.get("crop_image"),
+            "avatar_config": data.get("avatar_config"),
+            "abc_analysis": data.get("abc_analysis"),
             "notes": data.get("notes", ""),
         }
         moles.append(record)

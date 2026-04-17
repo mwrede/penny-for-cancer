@@ -23,58 +23,414 @@ async function callRoboflowWorkflow(workflowId, imageBase64) {
   return data.outputs || data
 }
 
-const FUN_NAMES = [
-  'Spotty McSpotface', 'Sir Dots-a-Lot', 'Princess Freckle', 'Captain Speckle',
-  'Dotty McDotface', 'Mole-y Cyrus', 'Spot Light', 'Freckle Freddy',
-  'Penny Lane', 'Dot Com', 'Spot Check', 'Lady Speckle',
-  'The Dot Father', 'Spot-ify', 'Dottie Parton', 'Mole-ana',
-  'Speck-tacular', 'Freckle Fern', 'Polka Dot', 'Cinnamon Spot',
-  'Cocoa Puff', 'Mocha Mark', 'Starry Spot', 'Pixel Pete',
-  'Button', 'Brownie Bite', 'Sunny Speck', 'Luna Dot',
+// ═════════════════════════════════════════════════════════════
+// AVATAR BUILDER CONFIG — Cartoon mole animals (not people!)
+// ═════════════════════════════════════════════════════════════
+// 10 base "poses" — each gives the mole a different face/expression
+const MOLE_POSES = [
+  { id: 'sleepy',    label: 'Sleepy' },
+  { id: 'happy',     label: 'Happy' },
+  { id: 'shy',       label: 'Shy' },
+  { id: 'wink',      label: 'Wink' },
+  { id: 'excited',   label: 'Excited' },
+  { id: 'curious',   label: 'Curious' },
+  { id: 'derpy',     label: 'Derpy' },
+  { id: 'zen',       label: 'Zen' },
+  { id: 'sparkle',   label: 'Sparkle' },
+  { id: 'brave',     label: 'Brave' },
+]
+const FUR_COLORS = [
+  { id: '6a4e35', label: 'Brown' },   { id: '3b2817', label: 'Dark' },
+  { id: '8d5524', label: 'Tan' },     { id: '5a5a5a', label: 'Gray' },
+  { id: '1a1a1a', label: 'Black' },   { id: 'c9a27b', label: 'Cream' },
+  { id: 'd78cc4', label: 'Pink' },    { id: '8ecae6', label: 'Blue' },
+]
+const NOSE_COLORS = [
+  { id: 'ff8fae', label: 'Pink' }, { id: 'ff5c7c', label: 'Rosy' },
+  { id: 'a0522d', label: 'Brown' }, { id: '2a2a2a', label: 'Black' },
+]
+const MOLE_HATS = [
+  { id: 'none',    label: 'None' },
+  { id: 'beanie',  label: 'Beanie' },
+  { id: 'party',   label: 'Party' },
+  { id: 'tophat',  label: 'Top Hat' },
+  { id: 'flower',  label: 'Flower' },
+  { id: 'leaf',    label: 'Leaf' },
+]
+const MOLE_GLASSES = [
+  { id: 'none',    label: 'None' },
+  { id: 'round',   label: 'Round' },
+  { id: 'square',  label: 'Square' },
+  { id: 'stars',   label: 'Stars' },
+  { id: 'sun',     label: 'Sunnies' },
+  { id: 'monocle', label: 'Monocle' },
+]
+const MOLE_EXTRAS = [
+  { id: 'blush',    label: '😊 Blush' },
+  { id: 'freckles', label: '✨ Freckles' },
+  { id: 'bandaid',  label: '🩹 Bandaid' },
 ]
 
-// ═════════════════════════════════════════════════════════════
-// CUTE MOLE AVATAR — AI-generated cartoon from Pollinations.ai
-// Falls back to DiceBear while loading
-// ═════════════════════════════════════════════════════════════
-function MoleAvatar({ name, size = 48 }) {
-  const [loaded, setLoaded] = useState(false)
-  const [error, setError] = useState(false)
-  const n = (name || 'Mole').trim()
+function defaultAvatarConfig(nameOrSeed) {
+  const seed = (nameOrSeed || 'mole').toString()
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
+  return {
+    pose: MOLE_POSES[h % MOLE_POSES.length].id,
+    furColor: FUR_COLORS[(h >> 3) % FUR_COLORS.length].id,
+    noseColor: NOSE_COLORS[(h >> 5) % NOSE_COLORS.length].id,
+    hat: 'none',
+    glasses: 'none',
+    extras: [],
+  }
+}
 
-  // AI-generated cartoon URL from Pollinations (free, no auth)
-  const aiUrl = useMemo(() => {
-    const prompt = `cute kawaii cartoon mascot character named ${n}, chibi style, simple, colorful, round, adorable, white background, sticker art`
-    return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=256&height=256&nologo=true&seed=${n.length * 7}`
-  }, [n])
-
-  // DiceBear instant fallback
-  const fallbackUrl = `https://api.dicebear.com/9.x/fun-emoji/svg?seed=${encodeURIComponent(n)}&size=${size * 2}`
+// ═════════════════════════════════════════════════════════════
+// MOLE CHARACTER — SVG cartoon mole animal rendered from config
+// Body, paws, snout, whiskers; expression/hat/glasses overlays parameterized.
+// ═════════════════════════════════════════════════════════════
+function MoleCharacter({ config, size = 64 }) {
+  const c = config || defaultAvatarConfig('mole')
+  const fur = `#${c.furColor}`
+  const furDark = shadeHex(c.furColor, -0.25)
+  const nose = `#${c.noseColor}`
+  const pose = c.pose || 'happy'
 
   return (
-    <div className="mole-avatar" style={{ width: size, height: size, flexShrink: 0, position: 'relative' }}>
-      {/* DiceBear shown while AI image loads */}
-      {!loaded && (
-        <img
-          src={fallbackUrl}
-          alt={n}
-          style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', position: 'absolute', top: 0, left: 0 }}
-        />
+    <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      {/* White background circle */}
+      <circle cx="50" cy="50" r="50" fill="#ffffff" />
+
+      {/* Body (pear-shape) */}
+      <ellipse cx="50" cy="68" rx="32" ry="24" fill={fur} />
+      {/* Belly accent */}
+      <ellipse cx="50" cy="74" rx="18" ry="11" fill={furDark} opacity="0.4" />
+
+      {/* Paws */}
+      <ellipse cx="28" cy="82" rx="8" ry="6" fill={fur} />
+      <ellipse cx="72" cy="82" rx="8" ry="6" fill={fur} />
+      {/* Paw claws */}
+      <path d="M 24 84 L 22 87 M 28 85 L 28 89 M 32 84 L 34 87" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />
+      <path d="M 68 84 L 66 87 M 72 85 L 72 89 M 76 84 L 78 87" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" />
+
+      {/* Head (round on top of body) */}
+      <circle cx="50" cy="45" r="26" fill={fur} />
+      {/* Little tufts on top of head */}
+      <path d="M 35 22 Q 38 18 42 22" fill={fur} stroke="none" />
+      <path d="M 58 22 Q 62 18 65 22" fill={fur} stroke="none" />
+
+      {/* Snout */}
+      <ellipse cx="50" cy="54" rx="11" ry="8" fill={shadeHex(c.furColor, 0.15)} />
+      {/* Nose */}
+      <ellipse cx="50" cy="50" rx="5" ry="4" fill={nose} />
+      <ellipse cx="48" cy="48.5" rx="1.2" ry="1" fill="#fff" opacity="0.8" />
+
+      {/* Whiskers */}
+      <g stroke="#2a2a2a" strokeWidth="0.8" strokeLinecap="round" opacity="0.7">
+        <line x1="42" y1="54" x2="32" y2="52" />
+        <line x1="42" y1="56" x2="32" y2="57" />
+        <line x1="58" y1="54" x2="68" y2="52" />
+        <line x1="58" y1="56" x2="68" y2="57" />
+      </g>
+
+      {/* Eyes — depend on pose */}
+      <MoleEyes pose={pose} />
+
+      {/* Mouth / cheeks — depend on pose */}
+      <MoleMouth pose={pose} />
+
+      {/* Extras */}
+      {c.extras?.includes('blush') && (
+        <>
+          <ellipse cx="32" cy="48" rx="4" ry="2" fill="#ff9ab1" opacity="0.7" />
+          <ellipse cx="68" cy="48" rx="4" ry="2" fill="#ff9ab1" opacity="0.7" />
+        </>
       )}
-      {/* AI-generated image */}
-      {!error && (
-        <img
-          src={aiUrl}
-          alt={n}
-          onLoad={() => setLoaded(true)}
-          onError={() => setError(true)}
-          style={{
-            width: size, height: size, borderRadius: '50%', objectFit: 'cover',
-            opacity: loaded ? 1 : 0, transition: 'opacity 0.3s',
-            position: loaded ? 'relative' : 'absolute', top: 0, left: 0
-          }}
-        />
+      {c.extras?.includes('freckles') && (
+        <g fill="#3a2210" opacity="0.5">
+          <circle cx="38" cy="52" r="0.8" /><circle cx="41" cy="55" r="0.7" />
+          <circle cx="59" cy="55" r="0.7" /><circle cx="62" cy="52" r="0.8" />
+        </g>
       )}
+      {c.extras?.includes('bandaid') && (
+        <g transform="translate(70 35) rotate(30)">
+          <rect x="-7" y="-2.5" width="14" height="5" rx="2" fill="#ffd7a8" stroke="#e09f5c" strokeWidth="0.5" />
+          <circle cx="-4" cy="0" r="0.5" fill="#e09f5c" /><circle cx="0" cy="0" r="0.5" fill="#e09f5c" /><circle cx="4" cy="0" r="0.5" fill="#e09f5c" />
+        </g>
+      )}
+
+      {/* Glasses overlay */}
+      <MoleGlasses kind={c.glasses} />
+
+      {/* Hat overlay */}
+      <MoleHat kind={c.hat} />
+    </svg>
+  )
+}
+
+// Eye expressions by pose
+function MoleEyes({ pose }) {
+  const stroke = '#1a1a1a'
+  switch (pose) {
+    case 'sleepy':
+      return <g stroke={stroke} strokeWidth="2" fill="none" strokeLinecap="round">
+        <path d="M 36 42 Q 40 45 44 42" /><path d="M 56 42 Q 60 45 64 42" />
+      </g>
+    case 'happy':
+      return <g stroke={stroke} strokeWidth="2" fill="none" strokeLinecap="round">
+        <path d="M 36 44 Q 40 40 44 44" /><path d="M 56 44 Q 60 40 64 44" />
+      </g>
+    case 'wink':
+      return <g>
+        <circle cx="40" cy="42" r="2.5" fill={stroke} /><circle cx="39" cy="41" r="0.8" fill="#fff" />
+        <path d="M 56 42 Q 60 45 64 42" stroke={stroke} strokeWidth="2" fill="none" strokeLinecap="round" />
+      </g>
+    case 'excited':
+      return <g>
+        <circle cx="40" cy="42" r="3" fill={stroke} /><circle cx="38.8" cy="40.8" r="1" fill="#fff" />
+        <circle cx="60" cy="42" r="3" fill={stroke} /><circle cx="58.8" cy="40.8" r="1" fill="#fff" />
+      </g>
+    case 'curious':
+      return <g>
+        <circle cx="40" cy="42" r="3.5" fill={stroke} /><circle cx="38.5" cy="40.5" r="1.2" fill="#fff" />
+        <circle cx="60" cy="42" r="2" fill={stroke} />
+      </g>
+    case 'derpy':
+      return <g>
+        <circle cx="38" cy="41" r="2.5" fill={stroke} />
+        <circle cx="62" cy="43" r="2.5" fill={stroke} />
+      </g>
+    case 'zen':
+      return <g stroke={stroke} strokeWidth="2" fill="none" strokeLinecap="round">
+        <line x1="35" y1="42" x2="45" y2="42" /><line x1="55" y1="42" x2="65" y2="42" />
+      </g>
+    case 'sparkle':
+      return <g>
+        <path d="M 40 42 L 42 40 L 44 42 L 42 44 Z" fill="#ffd54f" />
+        <path d="M 60 42 L 62 40 L 64 42 L 62 44 Z" fill="#ffd54f" />
+      </g>
+    case 'brave':
+      return <g>
+        <circle cx="40" cy="42" r="2.5" fill={stroke} /><line x1="35" y1="38" x2="45" y2="40" stroke={stroke} strokeWidth="1.5" />
+        <circle cx="60" cy="42" r="2.5" fill={stroke} /><line x1="55" y1="40" x2="65" y2="38" stroke={stroke} strokeWidth="1.5" />
+      </g>
+    case 'shy':
+    default:
+      return <g stroke={stroke} strokeWidth="2" fill="none" strokeLinecap="round">
+        <path d="M 36 43 Q 40 41 44 43" /><path d="M 56 43 Q 60 41 64 43" />
+      </g>
+  }
+}
+
+function MoleMouth({ pose }) {
+  const stroke = '#1a1a1a'
+  if (pose === 'happy' || pose === 'excited' || pose === 'sparkle') {
+    return <path d="M 46 60 Q 50 64 54 60" stroke={stroke} strokeWidth="1.5" fill="#c14765" strokeLinecap="round" />
+  }
+  if (pose === 'derpy') {
+    return <g><path d="M 46 60 L 54 60" stroke={stroke} strokeWidth="1.5" strokeLinecap="round" />
+      <ellipse cx="52" cy="62" rx="3" ry="2" fill="#ff6b8a" /></g>
+  }
+  if (pose === 'zen' || pose === 'sleepy') {
+    return <path d="M 47 60 Q 50 58 53 60" stroke={stroke} strokeWidth="1.2" fill="none" strokeLinecap="round" />
+  }
+  return <path d="M 47 60 Q 50 62 53 60" stroke={stroke} strokeWidth="1.2" fill="none" strokeLinecap="round" />
+}
+
+function MoleGlasses({ kind }) {
+  if (!kind || kind === 'none') return null
+  const frame = '#1a1a1a'
+  switch (kind) {
+    case 'round':
+      return <g fill="none" stroke={frame} strokeWidth="2">
+        <circle cx="40" cy="42" r="7" /><circle cx="60" cy="42" r="7" />
+        <line x1="47" y1="42" x2="53" y2="42" />
+      </g>
+    case 'square':
+      return <g fill="none" stroke={frame} strokeWidth="2">
+        <rect x="33" y="36" width="14" height="12" rx="1.5" />
+        <rect x="53" y="36" width="14" height="12" rx="1.5" />
+        <line x1="47" y1="42" x2="53" y2="42" />
+      </g>
+    case 'stars':
+      return <g fill="none" stroke="#ff4081" strokeWidth="1.8">
+        <path d="M 40 35 L 42 40 L 47 40 L 43 43 L 45 48 L 40 45 L 35 48 L 37 43 L 33 40 L 38 40 Z" fill="#ff408166" />
+        <path d="M 60 35 L 62 40 L 67 40 L 63 43 L 65 48 L 60 45 L 55 48 L 57 43 L 53 40 L 58 40 Z" fill="#ff408166" />
+      </g>
+    case 'sun':
+      return <g>
+        <rect x="32" y="37" width="16" height="10" rx="2" fill="#1a1a1a" />
+        <rect x="52" y="37" width="16" height="10" rx="2" fill="#1a1a1a" />
+        <line x1="48" y1="42" x2="52" y2="42" stroke="#1a1a1a" strokeWidth="2" />
+      </g>
+    case 'monocle':
+      return <g fill="none" stroke={frame} strokeWidth="2">
+        <circle cx="60" cy="42" r="7" />
+        <line x1="60" y1="49" x2="62" y2="58" />
+      </g>
+    default: return null
+  }
+}
+
+function MoleHat({ kind }) {
+  if (!kind || kind === 'none') return null
+  switch (kind) {
+    case 'beanie':
+      return <g>
+        <path d="M 28 24 Q 50 8 72 24 L 72 28 L 28 28 Z" fill="#e53935" />
+        <rect x="27" y="26" width="46" height="5" rx="1" fill="#c62828" />
+        <circle cx="50" cy="10" r="4" fill="#fff" />
+      </g>
+    case 'party':
+      return <g>
+        <path d="M 50 4 L 62 26 L 38 26 Z" fill="#42a5f5" />
+        <circle cx="44" cy="14" r="1.5" fill="#ffeb3b" />
+        <circle cx="54" cy="18" r="1.5" fill="#ff4081" />
+        <circle cx="50" cy="22" r="1.5" fill="#66bb6a" />
+        <circle cx="50" cy="4" r="2.5" fill="#fff" />
+      </g>
+    case 'tophat':
+      return <g>
+        <rect x="30" y="24" width="40" height="3" fill="#1a1a1a" />
+        <rect x="36" y="6" width="28" height="20" fill="#1a1a1a" />
+        <rect x="36" y="16" width="28" height="3" fill="#e53935" />
+      </g>
+    case 'flower':
+      return <g>
+        <circle cx="30" cy="24" r="4" fill="#ffeb3b" />
+        <circle cx="26" cy="22" r="3" fill="#ff4081" />
+        <circle cx="34" cy="22" r="3" fill="#ff4081" />
+        <circle cx="30" cy="18" r="3" fill="#ff4081" />
+        <circle cx="30" cy="24" r="2" fill="#ffeb3b" />
+      </g>
+    case 'leaf':
+      return <g>
+        <path d="M 40 25 Q 50 8 62 25 Q 50 20 40 25 Z" fill="#66bb6a" />
+        <line x1="50" y1="25" x2="50" y2="12" stroke="#388e3c" strokeWidth="1.5" />
+      </g>
+    default: return null
+  }
+}
+
+// shade a hex string (no #) by a factor (-1 to 1)
+function shadeHex(hex, factor) {
+  const n = parseInt(hex, 16)
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255
+  if (factor < 0) { r = Math.round(r * (1 + factor)); g = Math.round(g * (1 + factor)); b = Math.round(b * (1 + factor)) }
+  else { r = Math.round(r + (255 - r) * factor); g = Math.round(g + (255 - g) * factor); b = Math.round(b + (255 - b) * factor) }
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`
+}
+
+// ═════════════════════════════════════════════════════════════
+// CUTE MOLE AVATAR — rendered from an avatarConfig (or derived from name)
+// ═════════════════════════════════════════════════════════════
+function MoleAvatar({ config, name, size = 48 }) {
+  const cfg = config || defaultAvatarConfig(name || 'Mole')
+  return (
+    <div className="mole-avatar" style={{ width: size, height: size, flexShrink: 0, borderRadius: '50%', overflow: 'hidden' }}>
+      <MoleCharacter config={cfg} size={size} />
+    </div>
+  )
+}
+
+// ═════════════════════════════════════════════════════════════
+// AVATAR BUILDER — pick a pose, fur, nose, glasses, hat, extras
+// ═════════════════════════════════════════════════════════════
+function AvatarBuilder({ config, onChange, onClose }) {
+  function set(patch) { onChange({ ...config, ...patch }) }
+  function toggleExtra(id) {
+    const has = config.extras?.includes(id)
+    set({ extras: has ? config.extras.filter(f => f !== id) : [...(config.extras || []), id] })
+  }
+  return (
+    <div className="avatar-builder">
+      <div className="ab-preview">
+        <MoleCharacter config={config} size={112} />
+      </div>
+
+      <div className="ab-section">
+        <label className="ab-label">Pick your mole buddy</label>
+        <div className="ab-types-grid">
+          {MOLE_POSES.map(t => (
+            <button key={t.id} type="button"
+              className={`ab-type ${config.pose === t.id ? 'active' : ''}`}
+              onClick={() => set({ pose: t.id })} title={t.label}>
+              <MoleCharacter config={{ ...config, pose: t.id }} size={48} />
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="ab-section">
+        <label className="ab-label">Fur Color</label>
+        <div className="ab-swatch-row">
+          {FUR_COLORS.map(c => (
+            <button key={c.id} type="button"
+              className={`ab-swatch ${config.furColor === c.id ? 'active' : ''}`}
+              style={{ background: `#${c.id}` }}
+              onClick={() => set({ furColor: c.id })}
+              title={c.label} />
+          ))}
+        </div>
+      </div>
+
+      <div className="ab-section">
+        <label className="ab-label">Nose</label>
+        <div className="ab-swatch-row">
+          {NOSE_COLORS.map(c => (
+            <button key={c.id} type="button"
+              className={`ab-swatch ${config.noseColor === c.id ? 'active' : ''}`}
+              style={{ background: `#${c.id}` }}
+              onClick={() => set({ noseColor: c.id })}
+              title={c.label} />
+          ))}
+        </div>
+      </div>
+
+      <div className="ab-section">
+        <label className="ab-label">Glasses</label>
+        <div className="ab-types-grid">
+          {MOLE_GLASSES.map(g => (
+            <button key={g.id} type="button"
+              className={`ab-type ${config.glasses === g.id ? 'active' : ''}`}
+              onClick={() => set({ glasses: g.id })} title={g.label}>
+              {g.id === 'none'
+                ? <span className="ab-none">None</span>
+                : <MoleCharacter config={{ ...config, glasses: g.id }} size={48} />}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="ab-section">
+        <label className="ab-label">Hat</label>
+        <div className="ab-types-grid">
+          {MOLE_HATS.map(h => (
+            <button key={h.id} type="button"
+              className={`ab-type ${config.hat === h.id ? 'active' : ''}`}
+              onClick={() => set({ hat: h.id })} title={h.label}>
+              {h.id === 'none'
+                ? <span className="ab-none">None</span>
+                : <MoleCharacter config={{ ...config, hat: h.id }} size={48} />}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="ab-section">
+        <label className="ab-label">Extras</label>
+        <div className="ab-chips">
+          {MOLE_EXTRAS.map(f => (
+            <button key={f.id} type="button"
+              className={`ab-chip ${config.extras?.includes(f.id) ? 'active' : ''}`}
+              onClick={() => toggleExtra(f.id)}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <button type="button" className="btn btn-primary" onClick={onClose}>Done</button>
     </div>
   )
 }
@@ -166,6 +522,10 @@ export default function App() {
   const [classification, setClassification] = useState(null)
   const [cropImageDataUrl, setCropImageDataUrl] = useState(null)
   const [selectedMole, setSelectedMole] = useState(null)
+  const [abcAnalysis, setAbcAnalysis] = useState(null)
+  // Mobile tap-to-crop flow: on phones, user taps the mole first; we crop a window around the tap and paint on the enlarged crop
+  const [labelStep, setLabelStep] = useState('paint') // 'target' | 'paint'
+  const [cropRect, setCropRect] = useState(null) // { x, y, size } in original-image coords
   const maskCanvasRef = useRef(null)
   const imgCanvasRef = useRef(null)
 
@@ -178,6 +538,7 @@ export default function App() {
   function goHome() {
     setPage('home'); setImage(null); setMeasurements(null)
     setPennyData(null); setClassification(null); setCropImageDataUrl(null); setSelectedMole(null)
+    setLabelStep('paint'); setCropRect(null)
     setStatus({ type: '', msg: '' })
   }
 
@@ -188,7 +549,12 @@ export default function App() {
   function selectMoleAndAnalyze(m) {
     setSelectedMole(m); setImage(null); setMeasurements(null)
     setPennyData(null); setClassification(null); setCropImageDataUrl(null)
+    setLabelStep('paint'); setCropRect(null)
     setStatus({ type: '', msg: '' }); setPage('new')
+  }
+
+  function isMobileViewport() {
+    return typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches
   }
 
   // Resize image to fit within maxDim and return base64 JPEG (keeps payload under Vercel's 4.5MB limit)
@@ -218,12 +584,31 @@ export default function App() {
   async function handleUpload(file) {
     setStatus({ type: 'loading', msg: 'Uploading...' })
     setMeasurements(null); setPennyData(null); setClassification(null); setCropImageDataUrl(null)
+    setCropRect(null)
     try {
       // Compress image for API calls (keeps under Vercel body size limit)
       const { b64, width, height, url, scaleBack } = await compressImage(file)
       setImage({ filename: file.name, width, height, url, base64: b64, scaleBack: scaleBack || 1 })
-      setStatus({ type: 'success', msg: 'Image loaded. Paint over the mole, then click Detect.' })
+      if (isMobileViewport()) {
+        setLabelStep('target')
+        setStatus({ type: 'info', msg: 'Tap the center of your mole to zoom in.' })
+      } else {
+        setLabelStep('paint')
+        setStatus({ type: 'success', msg: 'Image loaded. Paint over the mole, then click Detect.' })
+      }
     } catch (e) { setStatus({ type: 'error', msg: e.message }) }
+  }
+
+  // Called from CanvasEditor tap-target overlay on mobile
+  function handleTapTarget(tapX, tapY, imgW, imgH) {
+    // Window size: ~25% of the shorter image side, clamped to 280–600px. Gives a nice zoom for phones.
+    const side = Math.min(imgW, imgH)
+    const size = Math.max(280, Math.min(600, Math.round(side * 0.28)))
+    const x = Math.max(0, Math.min(Math.round(tapX - size / 2), imgW - size))
+    const y = Math.max(0, Math.min(Math.round(tapY - size / 2), imgH - size))
+    setCropRect({ x, y, size })
+    setLabelStep('paint')
+    setStatus({ type: 'success', msg: 'Now paint over the mole in the zoomed view.' })
   }
 
   // Crop mole region from canvas and return { dataUrl, base64 }
@@ -260,7 +645,11 @@ export default function App() {
     if (count < 50) { setStatus({ type: 'error', msg: 'Paint over the mole first.' }); return }
     setMaskPixelCount(count)
     setStatus({ type: 'loading', msg: 'Running Roboflow penny detection...' })
-    setMeasurements(null); setClassification(null); setCropImageDataUrl(null)
+    setMeasurements(null); setClassification(null); setCropImageDataUrl(null); setAbcAnalysis(null)
+
+    // A/B/C analysis — run locally on the mask + image
+    const abc = analyzeABC()
+    if (abc) setAbcAnalysis(abc)
     try {
       // Step 1: Detect penny — call Roboflow directly from browser (avoids Cloudflare blocking serverless IPs)
       const pennyResult = await callRoboflowWorkflow(RF_PENNY_WORKFLOW, image.base64)
@@ -312,7 +701,7 @@ export default function App() {
     } catch (e) { setStatus({ type: 'error', msg: e.message }) }
   }
 
-  async function handleSave(name, date, notes) {
+  async function handleSave(name, date, notes, avatarConfig) {
     try {
       await fetch(`${API}/api/moles`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -326,6 +715,8 @@ export default function App() {
             confidence: classification.confidence,
           } : null,
           crop_image: cropImageDataUrl || null,
+          avatar_config: avatarConfig || null,
+          abc_analysis: abcAnalysis || null,
         }),
       })
       setStatus({ type: 'success', msg: `Saved "${name}"! 🎉` }); loadHistory()
@@ -333,6 +724,7 @@ export default function App() {
   }
 
   async function handleDelete(id) {
+    if (!confirm('Delete this mole record? This cannot be undone.')) return
     await fetch(`${API}/api/moles?id=${id}`, { method: 'DELETE' }); loadHistory()
   }
 
@@ -341,6 +733,91 @@ export default function App() {
     const data = c.getContext('2d').getImageData(0, 0, c.width, c.height).data
     let n = 0; for (let i = 3; i < data.length; i += 4) if (data[i] > 0) n++
     return n
+  }
+
+  // ABC analysis — asymmetry, border irregularity, color variance — all client-side from mask + image.
+  function analyzeABC() {
+    const mc = maskCanvasRef.current, ic = imgCanvasRef.current
+    if (!mc || !ic) return null
+    const w = mc.width, h = mc.height
+    const mData = mc.getContext('2d').getImageData(0, 0, w, h).data
+    const iData = ic.getContext('2d').getImageData(0, 0, w, h).data
+
+    // Pass 1: bounding box + centroid + count
+    let minX = w, maxX = 0, minY = h, maxY = 0
+    let sumX = 0, sumY = 0, count = 0
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (mData[(y * w + x) * 4 + 3] > 0) {
+        sumX += x; sumY += y; count++
+        if (x < minX) minX = x; if (x > maxX) maxX = x
+        if (y < minY) minY = y; if (y > maxY) maxY = y
+      }
+    }
+    if (count < 30) return null
+    const cx = sumX / count, cy = sumY / count
+
+    // Asymmetry: fold across vertical and horizontal centroid axes, count mismatched pixels
+    let vMismatch = 0, hMismatch = 0
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const here = mData[(y * w + x) * 4 + 3] > 0
+      const rx = Math.round(2 * cx - x)
+      if (rx >= 0 && rx < w) {
+        const thereV = mData[(y * w + rx) * 4 + 3] > 0
+        if (here !== thereV) vMismatch++
+      }
+      const ry = Math.round(2 * cy - y)
+      if (ry >= 0 && ry < h) {
+        const thereH = mData[(ry * w + x) * 4 + 3] > 0
+        if (here !== thereH) hMismatch++
+      }
+    }
+    // Normalize: mismatch count / (2 * area). Max asymmetry between the two axes.
+    const asymmetry = Math.min(1, Math.max(vMismatch, hMismatch) / (2 * count))
+
+    // Border: circularity = 4πA / P². 1 = perfect circle, lower = more irregular.
+    let perimeter = 0
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      if (mData[(y * w + x) * 4 + 3] > 0) {
+        const up = y > 0 && mData[((y - 1) * w + x) * 4 + 3] > 0
+        const dn = y < h - 1 && mData[((y + 1) * w + x) * 4 + 3] > 0
+        const lf = x > 0 && mData[(y * w + (x - 1)) * 4 + 3] > 0
+        const rt = x < w - 1 && mData[(y * w + (x + 1)) * 4 + 3] > 0
+        if (!(up && dn && lf && rt)) perimeter++
+      }
+    }
+    const circularity = perimeter > 0 ? Math.min(1, (4 * Math.PI * count) / (perimeter * perimeter)) : 1
+    const borderIrregularity = 1 - circularity
+
+    // Color variance: RGB stddev within the painted mask
+    let sumR = 0, sumG = 0, sumB = 0
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4
+      if (mData[i + 3] > 0) { sumR += iData[i]; sumG += iData[i + 1]; sumB += iData[i + 2] }
+    }
+    const meanR = sumR / count, meanG = sumG / count, meanB = sumB / count
+    let varSum = 0
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 4
+      if (mData[i + 3] > 0) {
+        const dr = iData[i] - meanR, dg = iData[i + 1] - meanG, db = iData[i + 2] - meanB
+        varSum += dr * dr + dg * dg + db * db
+      }
+    }
+    const colorStddev = Math.sqrt(varSum / (count * 3))
+
+    // Score each (low / moderate / high) — thresholds are heuristic, not medical
+    const asymLevel = asymmetry < 0.15 ? 'low' : asymmetry < 0.30 ? 'moderate' : 'high'
+    const borderLevel = borderIrregularity < 0.25 ? 'smooth' : borderIrregularity < 0.50 ? 'irregular' : 'jagged'
+    const colorLevel = colorStddev < 20 ? 'uniform' : colorStddev < 40 ? 'mixed' : 'variable'
+
+    return {
+      asymmetry: Math.round(asymmetry * 1000) / 10, // %
+      asymmetryLevel: asymLevel,
+      borderIrregularity: Math.round(borderIrregularity * 1000) / 10,
+      borderLevel,
+      colorStddev: Math.round(colorStddev * 10) / 10,
+      colorLevel,
+    }
   }
 
   return (
@@ -378,7 +855,16 @@ export default function App() {
                 <button className="btn btn-outline" onClick={goHome}>&larr; Back to Home</button>
               </div>
               <UploadSection onUpload={handleUpload} />
-              {image && (
+              {image && labelStep === 'target' && (
+                <div className="sidebar-section">
+                  <h3>Step 1 of 2</h3>
+                  <p style={{ fontSize: '0.85rem', color: '#aaa', lineHeight: 1.5 }}>
+                    Tap the <strong style={{ color: '#f9a825' }}>center of your mole</strong> in the photo. We&rsquo;ll zoom in so you can paint it precisely.
+                  </p>
+                  {status.msg && <div className={`status-bar ${status.type}`}>{status.msg}</div>}
+                </div>
+              )}
+              {image && labelStep === 'paint' && (
                 <>
                   <PaintToolbar />
                   <MoleForm
@@ -386,6 +872,7 @@ export default function App() {
                     status={status} measurements={measurements} classification={classification}
                     cropImageDataUrl={cropImageDataUrl}
                     selectedMole={selectedMole} onClearSelection={() => setSelectedMole(null)}
+                    analysis={abcAnalysis}
                   />
                 </>
               )}
@@ -398,7 +885,15 @@ export default function App() {
                   <p>Upload or capture a photo with a penny placed next to the mole.</p>
                 </div>
               ) : (
-                <CanvasEditor image={image} maskCanvasRef={maskCanvasRef} imgCanvasRef={imgCanvasRef} pennyData={pennyData} />
+                <CanvasEditor
+                  image={image}
+                  maskCanvasRef={maskCanvasRef}
+                  imgCanvasRef={imgCanvasRef}
+                  pennyData={pennyData}
+                  labelStep={labelStep}
+                  cropRect={cropRect}
+                  onTapTarget={handleTapTarget}
+                />
               )}
             </main>
           </div>
@@ -431,7 +926,7 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
         </div>
         <h2>Welcome to A Penny For Cancer</h2>
         <p className="hero-subtitle mission">
-          The penny is dead, and of those still out there, some 60% of actively circulating coins go unused, so to my small denominated friend, I&rsquo;ve decided to have a penny solve cancer. Penny will be used to measure the mole, and track the mole, but guys, this is a silly app, 1s and 0s on a page. <strong>Seek medical advice for any mole if you are concerned.</strong> Hope this is helpful!
+          The penny is dead, and of the 300 billion still out there in circulation, some 60% go unused, so to my small denominated friend, here&rsquo;s your chance to shine once again. The penny will be used to provide a reference object to determine the area and diameter of the mole. And this should be obvious, but this is a silly project &mdash; <strong>if you are concerned, go to the doctor, please!</strong>
         </p>
       </section>
 
@@ -463,7 +958,10 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
       <section className="home-section">
         <h3>Recent Measurements</h3>
         {recent.length === 0 ? (
-          <p className="muted">No measurements yet. Start by analyzing a new mole above.</p>
+          <div className="empty-state">
+            <p className="muted">No measurements yet — your mole tracker starts here.</p>
+            <button className="btn btn-primary" onClick={onNew} style={{ width: 'auto', marginTop: 12 }}>✨ Analyze Your First Mole</button>
+          </div>
         ) : (
           <div className="recent-table">
             <div className="recent-header">
@@ -475,10 +973,7 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
               return (
                 <div key={m.id} className="recent-row">
                   <span className="recent-avatar">
-                    {m.crop_image
-                      ? <img src={m.crop_image} alt="" className="recent-thumb" />
-                      : <MoleAvatar name={m.name || 'Mole'} size={36} />
-                    }
+                    <MoleAvatar config={m.avatar_config} name={m.name || 'Mole'} size={36} />
                   </span>
                   <span className="recent-name">{m.name}</span>
                   <span className="recent-date">{m.date}</span>
@@ -534,25 +1029,6 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
         </div>
       </section>
 
-      {/* Mission */}
-      <section className="home-section mission-section">
-        <h3>Our Mission</h3>
-        <div className="mission-content">
-          <p>
-            <strong>Skin cancer is the most common cancer in the United States.</strong> One in five Americans will develop skin cancer by age 70, and melanoma &mdash; the most dangerous form &mdash; kills over 7,000 Americans each year.
-          </p>
-          <p>
-            Yet early detection changes everything. When caught early, the 5-year survival rate for melanoma is <strong>99%</strong>. The problem is most people don't monitor their moles regularly, and when they do, they have no objective way to measure changes.
-          </p>
-          <p>
-            <strong>A Penny For Cancer</strong> solves this with something everyone has: a penny. By placing a penny next to a mole and taking a photo, our AI-powered tool can calculate the exact size of the mole in millimeters, compare it against 2,000+ dermoscopic samples from the Stanford MIDAS database, and track changes over time &mdash; flagging any mole that grows more than 20%.
-          </p>
-          <p>
-            This is not a replacement for professional medical advice. It's a tool to help you be proactive about your skin health and know when it's time to see a dermatologist.
-          </p>
-        </div>
-      </section>
-
       <footer className="home-footer">
         <p>Not a medical device. Always consult a qualified dermatologist for clinical evaluation.</p>
       </footer>
@@ -604,7 +1080,7 @@ function ExistingMolePage({ moles, onSelect, onDelete, onBack }) {
             return (
               <div key={name} className="existing-card" onClick={() => onSelect(latest)}>
                 <div className="existing-card-top">
-                  <MoleAvatar name={name} size={52} />
+                  <MoleAvatar config={latest.avatar_config} name={name} size={52} />
                   <div className="existing-card-header">
                     <span className="existing-name">{name}</span>
                     <span className="existing-count">{entries.length} record{entries.length > 1 ? 's' : ''}</span>
@@ -756,7 +1232,7 @@ function PaintToolbar() {
 // ═════════════════════════════════════════════════════════════
 // CANVAS EDITOR
 // ═════════════════════════════════════════════════════════════
-function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData }) {
+function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData, labelStep, cropRect, onTapTarget }) {
   const containerRef = useRef()
   const painting = useRef(false)
   const lastPos = useRef({ x: 0, y: 0 })
@@ -765,23 +1241,32 @@ function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData }) {
   const psRef = useRef(ps)
   useEffect(() => { psRef.current = ps }, [ps])
 
+  // cropRect is in original-image coords. When set, we draw only that region 1:1 into the canvases.
+  const cr = cropRect
+  const drawW = cr ? cr.size : null
+  const drawH = cr ? cr.size : null
+
   useEffect(() => {
     const img = new window.Image()
     img.onload = () => {
       imgObjRef.current = img
-      imgCanvasRef.current.width = img.width; imgCanvasRef.current.height = img.height
-      maskCanvasRef.current.width = img.width; maskCanvasRef.current.height = img.height
-      imgCanvasRef.current.getContext('2d').drawImage(img, 0, 0); fitCanvas()
+      const w = cr ? cr.size : img.width, h = cr ? cr.size : img.height
+      imgCanvasRef.current.width = w; imgCanvasRef.current.height = h
+      maskCanvasRef.current.width = w; maskCanvasRef.current.height = h
+      const ctx = imgCanvasRef.current.getContext('2d')
+      if (cr) ctx.drawImage(img, cr.x, cr.y, cr.size, cr.size, 0, 0, cr.size, cr.size)
+      else ctx.drawImage(img, 0, 0)
+      fitCanvas()
     }
     img.src = image.url
-  }, [image])
+  }, [image, cr?.x, cr?.y, cr?.size])
 
   useEffect(() => {
-    if (!pennyData || !imgObjRef.current) return
+    if (!pennyData || !imgObjRef.current || cr) return
+    // Penny bbox only makes sense when painting on full image (penny is outside the mole crop)
     const ctx = imgCanvasRef.current.getContext('2d')
     ctx.drawImage(imgObjRef.current, 0, 0)
     const bbox = pennyData.bbox
-    // Scale bbox from compressed image coords back to original canvas coords
     const s = image.scaleBack || 1
     if (bbox) {
       ctx.strokeStyle = '#00ff88'; ctx.lineWidth = Math.max(3, Math.round(3 * s))
@@ -805,8 +1290,10 @@ function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData }) {
   function fitCanvas() {
     const area = containerRef.current?.parentElement; if (!area || !imgObjRef.current) return
     const r = area.getBoundingClientRect()
-    const s = Math.min((r.width - 40) / imgObjRef.current.width, (r.height - 40) / imgObjRef.current.height, 1)
-    const w = Math.round(imgObjRef.current.width * s) + 'px', h = Math.round(imgObjRef.current.height * s) + 'px'
+    const cw = cr ? cr.size : imgObjRef.current.width
+    const ch = cr ? cr.size : imgObjRef.current.height
+    const s = Math.min((r.width - 40) / cw, (r.height - 40) / ch, 1)
+    const w = Math.round(cw * s) + 'px', h = Math.round(ch * s) + 'px'
     for (const el of [containerRef.current, imgCanvasRef.current, maskCanvasRef.current]) { el.style.width = w; el.style.height = h }
   }
 
@@ -836,14 +1323,41 @@ function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData }) {
     for (const el of [c, imgCanvasRef.current, maskCanvasRef.current]) { el.style.width = w; el.style.height = h }
   }
 
+  // Tap-target mode — user taps mole location on the full image
+  function handleTapTarget(e) {
+    e.preventDefault()
+    const rect = imgCanvasRef.current.getBoundingClientRect()
+    const cx = e.touches ? e.changedTouches[0].clientX : e.clientX
+    const cy = e.touches ? e.changedTouches[0].clientY : e.clientY
+    const canvasX = (cx - rect.left) * (imgCanvasRef.current.width / rect.width)
+    const canvasY = (cy - rect.top) * (imgCanvasRef.current.height / rect.height)
+    onTapTarget && onTapTarget(canvasX, canvasY, imgObjRef.current.width, imgObjRef.current.height)
+  }
+
+  const inTargetMode = labelStep === 'target'
+
   return (
     <>
       <div className="canvas-container" ref={containerRef}>
         <canvas ref={imgCanvasRef} className="layer-canvas" />
         <canvas ref={maskCanvasRef} className="layer-canvas mask-canvas"
-          style={{ opacity: ps.opacity / 100, cursor: ps.tool === 'eraser' ? 'cell' : 'crosshair' }}
+          style={{
+            opacity: inTargetMode ? 0 : (ps.opacity / 100),
+            cursor: inTargetMode ? 'crosshair' : (ps.tool === 'eraser' ? 'cell' : 'crosshair'),
+            pointerEvents: inTargetMode ? 'none' : 'auto',
+          }}
           onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onMouseLeave={onUp}
           onTouchStart={onDown} onTouchMove={onMove} onTouchEnd={onUp} />
+        {inTargetMode && (
+          <div className="tap-target-overlay"
+            onClick={handleTapTarget} onTouchEnd={handleTapTarget}>
+            <div className="tap-target-hint">
+              <div className="tap-target-ring" />
+              <div className="tap-target-text">Tap the center of your mole</div>
+              <div className="tap-target-sub">We&rsquo;ll zoom in so you can paint precisely</div>
+            </div>
+          </div>
+        )}
       </div>
       <div className="zoom-controls">
         <button onClick={() => zoom(1.25)}>+</button>
@@ -857,18 +1371,20 @@ function CanvasEditor({ image, maskCanvasRef, imgCanvasRef, pennyData }) {
 // ═════════════════════════════════════════════════════════════
 // MOLE FORM — fun naming + auto classification results
 // ═════════════════════════════════════════════════════════════
-function MoleForm({ onDetect, onSave, status, measurements, classification, cropImageDataUrl, selectedMole, onClearSelection }) {
+function MoleForm({ onDetect, onSave, status, measurements, classification, cropImageDataUrl, selectedMole, onClearSelection, analysis }) {
   const [name, setName] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [notes, setNotes] = useState('')
-  const [showNamePicker, setShowNamePicker] = useState(false)
+  const [showBuilder, setShowBuilder] = useState(false)
+  const [avatarConfig, setAvatarConfig] = useState(() => defaultAvatarConfig('new-mole'))
 
-  useEffect(() => { if (selectedMole) setName(selectedMole.name) }, [selectedMole])
-
-  function randomName() {
-    const n = FUN_NAMES[Math.floor(Math.random() * FUN_NAMES.length)]
-    setName(n)
-  }
+  useEffect(() => {
+    if (selectedMole) {
+      setName(selectedMole.name)
+      if (selectedMole.avatar_config) setAvatarConfig(selectedMole.avatar_config)
+      else setAvatarConfig(defaultAvatarConfig(selectedMole.name))
+    }
+  }, [selectedMole])
 
   function diamClass(mm) { return mm >= 6 ? 'danger' : mm >= 4 ? 'warn' : 'safe' }
 
@@ -890,12 +1406,12 @@ function MoleForm({ onDetect, onSave, status, measurements, classification, crop
         </div>
       )}
 
-      {/* Fun name section with live avatar preview */}
+      {/* Name + avatar builder */}
       <div className="name-section">
         <div className="name-row">
-          <div className="name-avatar-preview">
-            <MoleAvatar name={name || 'Mole'} size={56} />
-          </div>
+          <button type="button" className="name-avatar-preview" onClick={() => setShowBuilder(s => !s)} title="Customize my mole">
+            <MoleAvatar config={avatarConfig} size={56} />
+          </button>
           <div className="name-input-area">
             <div className="field" style={{ marginBottom: 0 }}>
               <label>Mole Name</label>
@@ -903,20 +1419,11 @@ function MoleForm({ onDetect, onSave, status, measurements, classification, crop
             </div>
           </div>
         </div>
-        <div className="name-buttons">
-          <button className="btn-mini btn-dice" onClick={randomName} title="Random fun name">🎲 Random Name</button>
-          <button className="btn-mini btn-list" onClick={() => setShowNamePicker(!showNamePicker)} title="Pick from list">
-            {showNamePicker ? '✕ Close' : '📋 Name Ideas'}
-          </button>
-        </div>
-        {showNamePicker && (
-          <div className="name-picker">
-            {FUN_NAMES.map(n => (
-              <button key={n} className={`name-chip ${name === n ? 'active' : ''}`} onClick={() => { setName(n); setShowNamePicker(false) }}>
-                <img src={`https://api.dicebear.com/9.x/fun-emoji/svg?seed=${encodeURIComponent(n)}&size=48`} alt="" style={{ width: 24, height: 24, borderRadius: '50%' }} /> {n}
-              </button>
-            ))}
-          </div>
+        <button type="button" className="btn btn-outline btn-customize" onClick={() => setShowBuilder(s => !s)}>
+          {showBuilder ? '✕ Close' : '🎨 Customize My Mole'}
+        </button>
+        {showBuilder && (
+          <AvatarBuilder config={avatarConfig} onChange={setAvatarConfig} onClose={() => setShowBuilder(false)} />
         )}
       </div>
 
@@ -936,13 +1443,39 @@ function MoleForm({ onDetect, onSave, status, measurements, classification, crop
             <div className="result-row"><span className="rlabel">Mole diameter</span><span className={`rvalue ${diamClass(measurements.mole_diameter_mm)}`}>{measurements.mole_diameter_mm} mm ({measurements.mole_diameter_inches} in)</span></div>
           </div>
 
+          {/* ABC analysis — asymmetry, border, color */}
+          {analysis && (
+            <div className="abc-panel">
+              <h4>🔬 ABCDE Analysis</h4>
+              <p className="abc-intro">How this mole scores on the classic warning signs. Not medical advice.</p>
+              <AbcRow letter="A" title="Asymmetry" value={`${analysis.asymmetry}%`} level={analysis.asymmetryLevel}
+                hint={analysis.asymmetryLevel === 'low' ? 'Halves look similar — reassuring.' : analysis.asymmetryLevel === 'moderate' ? 'One half differs from the other.' : 'The two halves look very different.'} />
+              <AbcRow letter="B" title="Border" value={analysis.borderLevel} level={abcLevelToDanger(analysis.borderLevel, { smooth: 'low', irregular: 'moderate', jagged: 'high' })}
+                hint={analysis.borderLevel === 'smooth' ? 'Edges are clean and rounded.' : analysis.borderLevel === 'irregular' ? 'Edges are somewhat uneven.' : 'Edges are jagged or notched.'} />
+              <AbcRow letter="C" title="Color" value={analysis.colorLevel} level={abcLevelToDanger(analysis.colorLevel, { uniform: 'low', mixed: 'moderate', variable: 'high' })}
+                hint={analysis.colorLevel === 'uniform' ? 'One consistent color.' : analysis.colorLevel === 'mixed' ? 'A couple of tones mixed in.' : 'Multiple colors within the mole.'} />
+              <AbcRow letter="D" title="Diameter" value={`${measurements.mole_diameter_mm} mm`} level={measurements.mole_diameter_mm >= 6 ? 'high' : measurements.mole_diameter_mm >= 4 ? 'moderate' : 'low'}
+                hint={measurements.mole_diameter_mm >= 6 ? 'Larger than 6 mm — worth asking a doctor about.' : 'Under the 6 mm "pencil eraser" threshold.'} />
+              {selectedMole && (
+                <AbcRow letter="E" title="Evolving"
+                  value={(() => { const g = growthInfo?.pctChange; if (g == null) return '—'; return `${g > 0 ? '+' : ''}${g}%` })()}
+                  level={growthInfo?.pctChange >= 20 ? 'high' : (growthInfo?.pctChange ?? 0) > 0 ? 'moderate' : 'low'}
+                  hint={growthInfo?.pctChange >= 20 ? 'Grew more than 20% since last check — please see a doctor.' : growthInfo?.pctChange > 0 ? 'Slight growth since last measurement.' : 'No growth or smaller — good sign.'} />
+              )}
+              <div className="abc-disclaimer">
+                These scores are heuristic estimates from your painted mask and photo &mdash; they are <strong>not a medical diagnosis</strong>.
+              </div>
+            </div>
+          )}
+
           {/* Classification result — auto-run, shown inline */}
           {classification && (
             <div className={`classification-result ${classification.label === 'yes' ? 'cls-positive' : 'cls-negative'}`}>
               <div className="cls-source">🔬 AI Screening — 2,000+ dermoscopic samples from the Stanford MIDAS database</div>
               <div className="cls-header">
+                <MoleAvatar config={avatarConfig} size={44} />
                 <span className="cls-icon">{classification.label === 'yes' ? '⚠' : '✓'}</span>
-                <span className="cls-verdict">{classification.label === 'yes' ? 'Suspicious' : 'Likely Benign'}</span>
+                <span className="cls-verdict">{classification.label === 'yes' ? `${name || 'This mole'} looks suspicious` : `${name || 'This mole'} looks benign`}</span>
               </div>
               <div className="cls-confidence">Confidence: <strong>{classification.confidence}%</strong></div>
               {cropImageDataUrl && (
@@ -967,7 +1500,7 @@ function MoleForm({ onDetect, onSave, status, measurements, classification, crop
           {/* Share + Save buttons */}
           <div className="action-row">
             <ShareButton measurements={measurements} classification={classification} name={name || 'Unnamed'} />
-            <button className="btn btn-success" onClick={() => onSave(name || 'Unnamed', date, notes)}>💾 Save Record</button>
+            <button className="btn btn-success" onClick={() => onSave(name || 'Unnamed', date, notes, avatarConfig)}>💾 Save Record</button>
           </div>
         </>
       )}
@@ -978,6 +1511,24 @@ function MoleForm({ onDetect, onSave, status, measurements, classification, crop
 // ═════════════════════════════════════════════════════════════
 // HELPERS
 // ═════════════════════════════════════════════════════════════
+function abcLevelToDanger(value, map) { return map[value] || 'low' }
+
+function AbcRow({ letter, title, value, level, hint }) {
+  const cls = level === 'high' ? 'abc-high' : level === 'moderate' ? 'abc-moderate' : 'abc-low'
+  return (
+    <div className={`abc-row ${cls}`}>
+      <div className="abc-letter-badge">{letter}</div>
+      <div className="abc-row-body">
+        <div className="abc-row-head">
+          <span className="abc-title">{title}</span>
+          <span className="abc-value">{value}</span>
+        </div>
+        <div className="abc-hint">{hint}</div>
+      </div>
+    </div>
+  )
+}
+
 function parseClassification(result) {
   // Parse classification response from Roboflow workflow (called from browser)
   let items = result
