@@ -1733,7 +1733,10 @@ function ResultsPage({ name, setName, date, setDate, notes, setNotes, avatarConf
 
           {measurements && (
             <div className="results-panel reveal-in reveal-delay-1">
-              <h4>📏 Measurements</h4>
+              <h4>📏 Detection Overview</h4>
+              {classification && (
+                <div className="result-row"><span className="rlabel">Suspicious?</span><span className={`rvalue ${classification.label === 'yes' ? 'danger' : 'safe'}`}>{classification.label === 'yes' ? 'Yes' : 'No'} ({classification.confidence}% confident)</span></div>
+              )}
               <div className="result-row"><span className="rlabel">Diameter</span><span className={`rvalue ${diamClass(measurements.mole_diameter_mm)}`}>{measurements.mole_diameter_mm} mm</span></div>
               <div className="result-row"><span className="rlabel">Area</span><span className="rvalue">{measurements.mole_area_sq_mm} mm&sup2;</span></div>
               <div className="result-row"><span className="rlabel">Painted pixels</span><span className="rvalue">{measurements.mole_pixel_count.toLocaleString()}</span></div>
@@ -1876,35 +1879,46 @@ function AbcRow({ letter, title, value, level, hint }) {
 }
 
 function parseClassification(result) {
-  // Parse classification response from Roboflow workflow (called from browser)
-  let items = result
-  if (result && !Array.isArray(result) && result.outputs) items = result.outputs
-  if (!items) return { label: 'unknown', confidence: 0 }
-  if (!Array.isArray(items)) items = [items]
+  // Deep-walk the response and return the first {class, confidence} we find.
+  // Roboflow workflow shapes vary — sometimes nested under outputs[0].model_predictions,
+  // sometimes { predictions: { class, confidence } }, sometimes { top, predictions: { Yes: {confidence}, No: {confidence} } }.
+  function walk(node) {
+    if (!node || typeof node !== 'object') return null
 
-  for (const item of items) {
-    if (!item || typeof item !== 'object') continue
-    for (const [key, val] of Object.entries(item)) {
-      if (typeof val === 'object' && val !== null && !Array.isArray(val)) {
-        if (val.class) return { label: val.class, confidence: Math.round((val.confidence || 0) * 1000) / 10 }
-        if (val.predictions) {
-          const preds = val.predictions
-          if (typeof preds === 'object' && !Array.isArray(preds)) {
-            const top = val.top || ''
-            const topConf = preds[top]?.confidence || 0
-            return { label: top, confidence: Math.round(topConf * 1000) / 10 }
-          }
-          if (Array.isArray(preds) && preds.length > 0) {
-            return { label: preds[0].class || 'unknown', confidence: Math.round((preds[0].confidence || 0) * 1000) / 10 }
-          }
-        }
-      }
-      if (Array.isArray(val) && val.length > 0 && typeof val[0] === 'object' && val[0].class) {
-        return { label: val[0].class, confidence: Math.round((val[0].confidence || 0) * 1000) / 10 }
+    // Direct: { class: "Yes", confidence: 0.98 } or class_id + confidence
+    if (typeof node.confidence === 'number' && (typeof node.class === 'string' || typeof node.top === 'string')) {
+      return { label: (node.class || node.top), confidence: node.confidence }
+    }
+
+    // Predictions dict: { top: "Yes", predictions: { Yes: { confidence }, No: { confidence } } }
+    if (typeof node.top === 'string' && node.predictions && typeof node.predictions === 'object' && !Array.isArray(node.predictions)) {
+      const entry = node.predictions[node.top]
+      if (entry && typeof entry.confidence === 'number') {
+        return { label: node.top, confidence: entry.confidence }
       }
     }
+
+    // Recurse
+    if (Array.isArray(node)) {
+      for (const child of node) { const found = walk(child); if (found) return found }
+    } else {
+      for (const val of Object.values(node)) { const found = walk(val); if (found) return found }
+    }
+    return null
   }
-  return { label: 'unknown', confidence: 0 }
+
+  const hit = walk(result)
+  if (!hit) { console.warn('[classification] no class/confidence found in response', result); return { label: 'unknown', confidence: 0 } }
+
+  // Normalize: label to lowercase for easy comparison, raw for display.
+  // Confidence: if it's <=1 treat as a decimal fraction, else it's already a percentage.
+  let conf = hit.confidence
+  if (conf <= 1) conf = conf * 100
+  return {
+    label: String(hit.label).toLowerCase(),  // "Yes" → "yes"
+    raw_label: String(hit.label),            // keep original casing for display
+    confidence: Math.round(conf * 10) / 10,
+  }
 }
 
 function extractPennyArea(result) {
