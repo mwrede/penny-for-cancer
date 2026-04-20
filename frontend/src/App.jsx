@@ -1908,7 +1908,8 @@ function parseClassification(result) {
   }
 
   const hit = walk(result)
-  if (!hit) { console.warn('[classification] no class/confidence found in response', result); return { label: 'unknown', confidence: 0 } }
+  console.log('[classification] parsed from response:', { hit, rawResponse: result })
+  if (!hit) { console.warn('[classification] no class/confidence found — raw response logged above'); return { label: 'unknown', confidence: 0 } }
 
   // Normalize: label to lowercase for easy comparison, raw for display.
   // Confidence: if it's <=1 treat as a decimal fraction, else it's already a percentage.
