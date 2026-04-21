@@ -569,12 +569,47 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session); setAuthLoading(false)
+      if (session?.user?.id) migrateLocalMolesToAccount(session.user.id)
     })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
+      if (session?.user?.id) migrateLocalMolesToAccount(session.user.id)
     })
     return () => subscription.unsubscribe()
   }, [])
+
+  // When a user signs in, upload any anonymous localStorage records to their Supabase account.
+  // If one of those local records is the "current" in-progress record being viewed on the results
+  // page, remember the new cloud id so Redo labeling etc. still work.
+  async function migrateLocalMolesToAccount(userId) {
+    const local = loadLocalMoles()
+    if (!local.length) return
+    // We need to know which inserted row came from which local id, so insert one-by-one with returning.
+    let newCurrentId = null
+    for (const m of local) {
+      const { data, error } = await supabase
+        .from('moles')
+        .insert({
+          user_id: userId,
+          name: m.name,
+          date: m.date,
+          notes: m.notes,
+          measurements: m.measurements,
+          classification: m.classification,
+          crop_image: m.crop_image,
+          avatar_config: m.avatar_config,
+          abc_analysis: m.abc_analysis,
+        })
+        .select('id')
+        .single()
+      if (error) { console.warn('[moles] migrate row failed', error, m); continue }
+      if (currentRecordId && m.id === currentRecordId) newCurrentId = data.id
+    }
+    writeLocalMoles([])
+    if (newCurrentId) setCurrentRecordId(newCurrentId)
+    console.log(`[moles] migrated ${local.length} local records to account`)
+    loadHistory()
+  }
 
   // Load mole history on mount and whenever auth state changes (signed-in → cloud, signed-out → localStorage).
   useEffect(() => { loadHistory() }, [session?.user?.id])
@@ -601,40 +636,14 @@ export default function App() {
     })
   }, [classification, currentRecordId])
 
-  // If a user signs in AFTER a detection, migrate the local record to their Supabase account.
+  // If a signed-in user finishes a detection but somehow has no currentRecordId yet
+  // (e.g. they signed in mid-flow before auto-save completed), back-fill a save now.
   useEffect(() => {
-    if (!session?.user?.id || !measurements || flowStep !== 'results') return
-    // If there's no current record, create one in Supabase.
-    if (!currentRecordId) {
-      autoSaveRecord(measurements, abcAnalysis, cropImageDataUrl)
-      return
-    }
-    // If the current record lives in localStorage, migrate it to Supabase.
-    if (isLocalId(currentRecordId)) {
-      const existing = loadLocalMoles().find(m => m.id === currentRecordId)
-      if (!existing) return
-      ;(async () => {
-        const { data, error } = await supabase
-          .from('moles')
-          .insert({
-            user_id: session.user.id,
-            name: existing.name,
-            date: existing.date,
-            notes: existing.notes,
-            measurements: existing.measurements,
-            classification: existing.classification,
-            crop_image: existing.crop_image,
-            avatar_config: existing.avatar_config,
-            abc_analysis: existing.abc_analysis,
-          })
-          .select('id')
-          .single()
-        if (error) { console.warn('[moles] migrate failed', error); return }
-        writeLocalMoles(loadLocalMoles().filter(m => m.id !== currentRecordId))
-        setCurrentRecordId(data.id)
-        loadHistory()
-      })()
-    }
+    if (!session?.user?.id) return
+    if (flowStep !== 'results') return
+    if (!measurements) return
+    if (currentRecordId) return
+    autoSaveRecord(measurements, abcAnalysis, cropImageDataUrl)
   }, [session?.user?.id, flowStep])
 
   async function loadHistory() {
