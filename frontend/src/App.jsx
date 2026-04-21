@@ -992,6 +992,15 @@ export default function App() {
 
   return (
     <div className="app">
+      <div className="disclaimer-ticker" role="status" aria-label="illustrative-only disclaimer">
+        <div className="disclaimer-ticker-track">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <span key={i} className="disclaimer-ticker-item">
+              <strong>FOR ILLUSTRATIVE PURPOSES ONLY</strong> &middot; This model is displayed for potential uses of AI in a clinical setting. It is not approved for this use and you should consult a health care expert first. &middot;&nbsp;
+            </span>
+          ))}
+        </div>
+      </div>
       <header className="app-header">
         <div className="app-header-main" onClick={goHome} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
           <img src="/penny.png" alt="Penny" className="header-penny" />

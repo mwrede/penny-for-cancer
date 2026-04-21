@@ -9,6 +9,43 @@ body {
 
 .app { display: flex; flex-direction: column; height: 100vh; }
 
+/* ═══ ILLUSTRATIVE-ONLY DISCLAIMER TICKER ═══ */
+.disclaimer-ticker {
+  width: 100%; overflow: hidden; white-space: nowrap;
+  background: linear-gradient(90deg, #2a0808, #4a0c0c, #2a0808);
+  border-bottom: 1px solid rgba(239,83,80,0.4);
+  position: relative; z-index: 20;
+  padding: 6px 0;
+}
+.disclaimer-ticker::before, .disclaimer-ticker::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 40px;
+  pointer-events: none; z-index: 2;
+}
+.disclaimer-ticker::before { left: 0; background: linear-gradient(90deg, #0f0f13, transparent); }
+.disclaimer-ticker::after { right: 0; background: linear-gradient(270deg, #0f0f13, transparent); }
+.disclaimer-ticker-track {
+  display: inline-block;
+  animation: tickerScroll 60s linear infinite;
+  will-change: transform;
+}
+.disclaimer-ticker-item {
+  display: inline-block;
+  color: #ff6b6b; font-size: 0.78rem; font-weight: 500;
+  letter-spacing: 0.3px; padding-right: 24px;
+}
+.disclaimer-ticker-item strong {
+  color: #ff4040; font-weight: 800; letter-spacing: 0.6px;
+  text-shadow: 0 0 6px rgba(255,64,64,0.4);
+}
+@keyframes tickerScroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+@media (max-width: 768px) {
+  .disclaimer-ticker-item { font-size: 0.7rem; padding-right: 18px; }
+  .disclaimer-ticker-track { animation-duration: 45s; }
+}
+
 .app-header {
   background: linear-gradient(135deg, #1a1a2e, #16213e);
   padding: 14px 24px;
