@@ -2162,7 +2162,7 @@ function ResultsPage({ name, setName, date, setDate, notes, setNotes, avatarConf
       {/* ACTIONS */}
       <div className="results-actions reveal-in reveal-delay-3">
         <button className="btn btn-outline" onClick={onRedo}>↩ Redo labeling</button>
-        <ShareButton measurements={measurements} classification={classification} name={saveLabel} />
+        <ShareButton measurements={measurements} classification={classification} analysis={analysis} cropImageDataUrl={cropImageDataUrl} name={saveLabel} />
         {session ? (
           <button className="btn btn-success" disabled>
             {currentRecordId ? '✓ Saved automatically' : 'Saving…'}
