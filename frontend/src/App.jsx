@@ -1209,7 +1209,7 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
         </div>
         <h2>Welcome to A Penny For Cancer</h2>
         <p className="hero-subtitle mission">
-          The penny is dead, and of the 300 billion still out there in circulation, some 60% go unused, so to my small denominated friend, here&rsquo;s your chance to shine once again. The penny will be used to provide a reference object to determine the area and diameter of the mole. And this should be obvious, but this is a silly project &mdash; <strong>if you are concerned, go to the doctor, please!</strong>
+          The penny is dead, and of the 300 billion still out there in circulation, some 60% go unused, so to my small denominated friend, here&rsquo;s your chance to shine once again. The penny will be used to provide a reference object to determine the area and diameter of the mole.
         </p>
       </section>
 
