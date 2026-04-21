@@ -133,17 +133,25 @@ body {
   background: #13131a; border: 1px solid #2a2a4a; border-radius: 12px; overflow: hidden;
 }
 .recent-header {
-  display: grid; grid-template-columns: 44px 2fr 1fr 0.8fr 0.8fr 0.8fr;
+  display: grid; grid-template-columns: 44px 44px minmax(0, 2fr) minmax(0, 1fr) 0.8fr 0.9fr 0.9fr;
   padding: 10px 16px; background: #1a1a2e;
   font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: #666;
-  align-items: center;
+  align-items: center; gap: 8px;
 }
 .recent-row {
-  display: grid; grid-template-columns: 44px minmax(0, 2fr) minmax(0, 1fr) 0.8fr 0.9fr 0.9fr;
+  display: grid; grid-template-columns: 44px 44px minmax(0, 2fr) minmax(0, 1fr) 0.8fr 0.9fr 0.9fr;
   padding: 8px 16px; border-top: 1px solid #1e1e2e;
   font-size: 0.82rem; align-items: center; gap: 8px;
 }
 .recent-row > span { min-width: 0; }
+.recent-crop-col {
+  display: flex; align-items: center; justify-content: center;
+}
+.recent-crop-img {
+  width: 36px; height: 36px; border-radius: 8px;
+  object-fit: cover; border: 1px solid #2a2a4a;
+}
+.recent-crop-placeholder { color: #444; font-size: 0.7rem; }
 .recent-row:hover { background: rgba(255,255,255,0.02); }
 .recent-avatar { display: flex; align-items: center; }
 .recent-name {
@@ -1153,14 +1161,15 @@ body {
   .recent-header { display: none; }
   .recent-row {
     display: grid;
-    grid-template-columns: 44px 1fr auto;
+    grid-template-columns: 44px 44px 1fr auto;
     grid-template-areas:
-      "avatar name  actions"
-      "avatar meta  meta";
-    gap: 4px 12px; padding: 12px; background: #13131a;
+      "avatar crop name  actions"
+      "avatar crop meta  meta";
+    gap: 4px 10px; padding: 12px; background: #13131a;
     border: 1px solid #2a2a4a; border-radius: 10px; margin-bottom: 8px;
   }
   .recent-row .recent-avatar { grid-area: avatar; align-self: center; }
+  .recent-row .recent-crop-col { grid-area: crop; align-self: center; }
   .recent-row .recent-name { grid-area: name; font-size: 0.92rem; }
   .recent-row .recent-date { grid-area: meta; font-size: 0.72rem; }
   .recent-row .recent-diam, .recent-row .recent-cls {

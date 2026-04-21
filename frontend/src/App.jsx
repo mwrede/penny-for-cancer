@@ -565,15 +565,22 @@ export default function App() {
   const maskCanvasRef = useRef(null)
   const imgCanvasRef = useRef(null)
 
+  // Track which users we've already migrated to prevent duplicate uploads
+  // when auth state changes multiple times (INITIAL_SESSION, TOKEN_REFRESHED, etc.).
+  const migratedUsersRef = useRef(new Set())
+  const migrationInProgressRef = useRef(false)
+
   // Subscribe to auth state — load the current session, then react to sign-in / sign-out / token refresh.
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session); setAuthLoading(false)
-      if (session?.user?.id) migrateLocalMolesToAccount(session.user.id)
     })
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setSession(session)
-      if (session?.user?.id) migrateLocalMolesToAccount(session.user.id)
+      // Only migrate on a fresh SIGNED_IN event, and only once per user per page load.
+      if (event === 'SIGNED_IN' && session?.user?.id) {
+        migrateLocalMolesToAccount(session.user.id)
+      }
     })
     return () => subscription.unsubscribe()
   }, [])
@@ -582,8 +589,12 @@ export default function App() {
   // If one of those local records is the "current" in-progress record being viewed on the results
   // page, remember the new cloud id so Redo labeling etc. still work.
   async function migrateLocalMolesToAccount(userId) {
+    // Idempotency: already migrated for this user in this page load, or a migration is in-flight
+    if (migratedUsersRef.current.has(userId)) return
+    if (migrationInProgressRef.current) return
     const local = loadLocalMoles()
-    if (!local.length) return
+    if (!local.length) { migratedUsersRef.current.add(userId); return }
+    migrationInProgressRef.current = true
     // We need to know which inserted row came from which local id, so insert one-by-one with returning.
     let newCurrentId = null
     for (const m of local) {
@@ -607,6 +618,8 @@ export default function App() {
     }
     writeLocalMoles([])
     if (newCurrentId) setCurrentRecordId(newCurrentId)
+    migratedUsersRef.current.add(userId)
+    migrationInProgressRef.current = false
     console.log(`[moles] migrated ${local.length} local records to account`)
     loadHistory()
   }
@@ -1235,7 +1248,7 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
         ) : (
           <div className="recent-table">
             <div className="recent-header">
-              <span></span><span>Name</span><span>Date</span><span>Diameter</span><span>AI Comparison</span><span></span>
+              <span></span><span></span><span>Name</span><span>Date</span><span>Diameter</span><span>AI Comparison</span><span></span>
             </div>
             {recent.map(m => {
               const ms = m.measurements || {}
@@ -1245,11 +1258,14 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
                   <span className="recent-avatar">
                     <MoleAvatar config={m.avatar_config} name={m.name || 'Mole'} size={36} />
                   </span>
+                  <span className="recent-crop-col">
+                    {m.crop_image
+                      ? <img src={m.crop_image} alt="" className="recent-crop-img" />
+                      : <span className="recent-crop-placeholder">—</span>
+                    }
+                  </span>
                   <span className="recent-name">
                     <span className="recent-name-text">{m.name}</span>
-                    {m.crop_image && (
-                      <img src={m.crop_image} alt="" className="recent-name-crop" />
-                    )}
                   </span>
                   <span className="recent-date">{m.date}</span>
                   <span className={`recent-diam ${ms.mole_diameter_mm >= 6 ? 'danger' : ms.mole_diameter_mm >= 4 ? 'warn' : 'safe'}`}>
