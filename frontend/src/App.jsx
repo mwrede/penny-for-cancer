@@ -538,6 +538,7 @@ export default function App() {
   const [session, setSession] = useState(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [showSignInPrompt, setShowSignInPrompt] = useState(false)
+  const [showDetectDisclaimer, setShowDetectDisclaimer] = useState(false)
   const [page, setPage] = useState('home')
   const [image, setImage] = useState(null)
   const [moles, setMoles] = useState([])
@@ -1073,7 +1074,12 @@ export default function App() {
                 <>
                   <PaintToolbar />
                   <div className="sidebar-section">
-                    <button className="btn btn-primary btn-done-labeling" onClick={handleDetect}>
+                    <button className="btn btn-primary btn-done-labeling" onClick={() => {
+                      if (status.type === 'loading') return
+                      const count = countMaskPixels()
+                      if (count < 50) { setStatus({ type: 'error', msg: 'Paint over the mole first.' }); return }
+                      setShowDetectDisclaimer(true)
+                    }}>
                       {status.type === 'loading' ? <><span className="spinner" />{status.msg || 'Analyzing…'}</> : <>✓ Done Labeling</>}
                     </button>
                     {status.msg && status.type === 'error' && <div className={`status-bar ${status.type}`} style={{ marginTop: 8 }}>{status.msg}</div>}
@@ -1103,6 +1109,30 @@ export default function App() {
           </div>
         )}
       </PaintContext.Provider>
+
+      {showDetectDisclaimer && (
+        <div className="signin-modal-backdrop" onClick={() => setShowDetectDisclaimer(false)}>
+          <div className="signin-modal disclaimer-modal" onClick={e => e.stopPropagation()}>
+            <div className="disclaimer-icon">⚠️</div>
+            <h3>Before you run the analysis</h3>
+            <p className="disclaimer-body">
+              This tool is <strong>for illustrative purposes only</strong>. It shows potential uses of AI
+              in a clinical setting but is <strong>not approved for medical use</strong>. Results are
+              heuristic estimates, not a diagnosis.
+            </p>
+            <p className="disclaimer-body">
+              If you have any concerns about a mole, <strong>consult a qualified dermatologist</strong>.
+            </p>
+            <button
+              className="btn btn-primary"
+              onClick={() => { setShowDetectDisclaimer(false); handleDetect() }}
+            >
+              I understand &mdash; run the analysis
+            </button>
+            <button className="btn btn-outline" onClick={() => setShowDetectDisclaimer(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
 
       {showSignInPrompt && (
         <div className="signin-modal-backdrop" onClick={() => setShowSignInPrompt(false)}>
@@ -1860,7 +1890,7 @@ function ResultsPage({ name, setName, date, setDate, notes, setNotes, avatarConf
         </div>
       )}
       <div className="results-footer-actions">
-        <button className="link-btn" onClick={onStartOver}>Start a completely new analysis →</button>
+        <button className="btn btn-start-over" onClick={onStartOver}>Start a completely new analysis →</button>
       </div>
     </div>
   )

@@ -707,6 +707,34 @@ body {
 }
 .btn-signin-save:hover { background: #f1f1f1; opacity: 1; color: #1a1a1a; }
 
+/* Disclaimer modal — before running detection */
+.disclaimer-modal {
+  border-color: rgba(239,83,80,0.4);
+  background: linear-gradient(180deg, #1a0e0e 0%, #13131a 100%);
+}
+.disclaimer-icon { font-size: 3rem; }
+.disclaimer-modal h3 { color: #ef5350; }
+.disclaimer-body {
+  color: #ccc !important; font-size: 0.92rem !important;
+  line-height: 1.55 !important; text-align: left;
+  max-width: none !important;
+}
+.disclaimer-body strong { color: #ff8a80; }
+
+/* Bigger "Start a completely new analysis" button */
+.btn-start-over {
+  background: #fff; color: #0f0f13;
+  padding: 14px 28px; border-radius: 12px;
+  font-size: 1rem; font-weight: 700;
+  border: none; cursor: pointer;
+  transition: all 0.2s; font-family: inherit;
+  box-shadow: 0 4px 16px rgba(255,255,255,0.1);
+}
+.btn-start-over:hover {
+  background: #f1f1f1; transform: translateY(-2px);
+  box-shadow: 0 6px 22px rgba(255,255,255,0.18);
+}
+
 /* ═══ LOGIN PAGE ═══ */
 .login-page {
   min-height: 100vh; display: flex; flex-direction: column;
