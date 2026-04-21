@@ -1167,6 +1167,7 @@ function GoogleIcon() {
 // HOME PAGE
 // ═════════════════════════════════════════════════════════════
 function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
+  const [detailMole, setDetailMole] = useState(null)
   const recent = [...moles].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 10)
 
   const grouped = {}
@@ -1231,9 +1232,12 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
               const ms = m.measurements || {}
               const cls = m.classification
               return (
-                <div key={m.id} className="recent-row">
+                <div key={m.id} className="recent-row recent-row-clickable" onClick={() => setDetailMole(m)}>
                   <span className="recent-avatar">
                     <MoleAvatar config={m.avatar_config} name={m.name || 'Mole'} size={36} />
+                    {m.crop_image && (
+                      <img src={m.crop_image} alt="" className="recent-crop" />
+                    )}
                   </span>
                   <span className="recent-name">{m.name}</span>
                   <span className="recent-date">{m.date}</span>
@@ -1245,7 +1249,7 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
                       <>{cls.label === 'yes' ? '⚠️' : '✅'} {cls.confidence}%</>
                     ) : '—'}
                   </span>
-                  <span className="recent-actions">
+                  <span className="recent-actions" onClick={e => e.stopPropagation()}>
                     <button className="link-btn" onClick={() => onSelectMole(m)}>Re-measure</button>
                     <button className="link-btn danger-link" onClick={() => onDelete(m.id)}>&times;</button>
                   </span>
@@ -1295,6 +1299,83 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
           Powered by <a href="https://roboflow.com" target="_blank" rel="noopener noreferrer">Roboflow</a>
         </p>
       </footer>
+
+      {detailMole && (
+        <MoleDetailModal mole={detailMole} onClose={() => setDetailMole(null)} onReMeasure={m => { setDetailMole(null); onSelectMole(m) }} />
+      )}
+    </div>
+  )
+}
+
+function MoleDetailModal({ mole, onClose, onReMeasure }) {
+  const m = mole || {}
+  const ms = m.measurements || {}
+  const cls = m.classification
+  const abc = m.abc_analysis
+  const diamClass = (mm) => mm >= 6 ? 'danger' : mm >= 4 ? 'warn' : 'safe'
+  return (
+    <div className="signin-modal-backdrop" onClick={onClose}>
+      <div className="mole-detail-modal" onClick={e => e.stopPropagation()}>
+        <button className="mole-detail-close" onClick={onClose} aria-label="Close">✕</button>
+        <div className="mole-detail-header">
+          <MoleAvatar config={m.avatar_config} name={m.name || 'Mole'} size={64} />
+          <div>
+            <div className="mole-detail-name">{m.name || 'Unnamed'}</div>
+            <div className="mole-detail-date">{m.date}</div>
+          </div>
+        </div>
+
+        {m.crop_image && (
+          <img src={m.crop_image} alt="Cropped mole" className="mole-detail-crop" />
+        )}
+
+        <div className="results-panel" style={{ marginTop: 12 }}>
+          <h4>📏 Detection Overview</h4>
+          {cls && (
+            <div className="result-row"><span className="rlabel">AI Comparison</span><span className={`rvalue ${cls.label === 'yes' ? 'danger' : 'safe'}`}>{cls.label === 'yes' ? 'Yes' : 'No'}, {cls.confidence}% confidence</span></div>
+          )}
+          {ms.mole_diameter_mm != null && (
+            <div className="result-row"><span className="rlabel">Diameter</span><span className={`rvalue ${diamClass(ms.mole_diameter_mm)}`}>{ms.mole_diameter_mm} mm</span></div>
+          )}
+          {ms.mole_area_sq_mm != null && (
+            <div className="result-row"><span className="rlabel">Area</span><span className="rvalue">{ms.mole_area_sq_mm} mm²</span></div>
+          )}
+          {ms.mole_pixel_count != null && (
+            <div className="result-row"><span className="rlabel">Painted pixels</span><span className="rvalue">{ms.mole_pixel_count.toLocaleString()}</span></div>
+          )}
+          {ms.penny_pixel_area != null && (
+            <div className="result-row"><span className="rlabel">Penny reference</span><span className="rvalue">{ms.penny_pixel_area.toLocaleString()} px</span></div>
+          )}
+        </div>
+
+        {abc && (
+          <div className="abc-panel" style={{ marginTop: 10 }}>
+            <h4>🔬 ABCDE Analysis</h4>
+            <AbcRow letter="A" title="Asymmetry" value={`${abc.asymmetry}%`} level={abc.asymmetryLevel}
+              hint={abc.asymmetryLevel === 'low' ? 'Halves look similar.' : abc.asymmetryLevel === 'moderate' ? 'One half differs somewhat.' : 'The two halves look very different.'} />
+            <AbcRow letter="B" title="Border" value={abc.borderLevel} level={abcLevelToDanger(abc.borderLevel, { smooth: 'low', irregular: 'moderate', jagged: 'high' })}
+              hint={abc.borderLevel === 'smooth' ? 'Edges are clean and rounded.' : abc.borderLevel === 'irregular' ? 'Edges are somewhat uneven.' : 'Edges are jagged or notched.'} />
+            <AbcRow letter="C" title="Color" value={abc.colorLevel} level={abcLevelToDanger(abc.colorLevel, { uniform: 'low', mixed: 'moderate', variable: 'high' })}
+              hint={abc.colorLevel === 'uniform' ? 'One consistent color.' : abc.colorLevel === 'mixed' ? 'A couple of tones mixed in.' : 'Multiple colors within the mole.'} />
+            {ms.mole_diameter_mm != null && (
+              <AbcRow letter="D" title="Diameter" value={`${ms.mole_diameter_mm} mm`} level={ms.mole_diameter_mm >= 6 ? 'high' : ms.mole_diameter_mm >= 4 ? 'moderate' : 'low'}
+                hint={ms.mole_diameter_mm >= 6 ? 'Larger than 6 mm — worth asking a doctor about.' : 'Under the 6 mm "pencil eraser" threshold.'} />
+            )}
+          </div>
+        )}
+
+        {m.notes && (
+          <div className="mole-detail-notes">
+            <div className="ab-label">Observations</div>
+            <p>{m.notes}</p>
+          </div>
+        )}
+
+        <div className="mole-detail-actions">
+          <button className="btn btn-outline" onClick={onClose}>Close</button>
+          <button className="btn btn-primary" onClick={() => onReMeasure(m)}>Re-measure</button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1774,7 +1855,7 @@ function ResultsPage({ name, setName, date, setDate, notes, setNotes, avatarConf
             <div className="results-panel reveal-in reveal-delay-1">
               <h4>📏 Detection Overview</h4>
               {classification && (
-                <div className="result-row"><span className="rlabel">Suspicious?</span><span className={`rvalue ${classification.label === 'yes' ? 'danger' : 'safe'}`}>{classification.label === 'yes' ? 'Yes' : 'No'} ({classification.confidence}% confident)</span></div>
+                <div className="result-row"><span className="rlabel">AI Comparison</span><span className={`rvalue ${classification.label === 'yes' ? 'danger' : 'safe'}`}>{classification.label === 'yes' ? 'Yes' : 'No'}, {classification.confidence}% confidence</span></div>
               )}
               <div className="result-row"><span className="rlabel">Diameter</span><span className={`rvalue ${diamClass(measurements.mole_diameter_mm)}`}>{measurements.mole_diameter_mm} mm</span></div>
               <div className="result-row"><span className="rlabel">Area</span><span className="rvalue">{measurements.mole_area_sq_mm} mm&sup2;</span></div>
