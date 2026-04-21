@@ -1779,7 +1779,7 @@ function NameForm({ name, setName, date, setDate, notes, setNotes, avatarConfig,
           <div className="name-input-area">
             <div className="field" style={{ marginBottom: 0 }}>
               <label>Mole Name</label>
-              <input value={name} onChange={e => setName(e.target.value)} placeholder="Give it a fun name!" />
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Give it a fun name!" maxLength={50} />
             </div>
           </div>
         </div>
@@ -1945,7 +1945,7 @@ function ResultsPage({ name, setName, date, setDate, notes, setNotes, avatarConf
                     <div className="name-input-area">
                       <div className="field" style={{ marginBottom: 0 }}>
                         <label>Mole Name</label>
-                        <input value={name} onChange={e => setName(e.target.value)} placeholder="Give it a fun name!" />
+                        <input value={name} onChange={e => setName(e.target.value)} placeholder="Give it a fun name!" maxLength={50} />
                       </div>
                     </div>
                   </div>

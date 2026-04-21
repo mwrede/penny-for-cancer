@@ -139,10 +139,11 @@ body {
   align-items: center;
 }
 .recent-row {
-  display: grid; grid-template-columns: 44px 2fr 1fr 0.8fr 0.8fr 0.8fr;
+  display: grid; grid-template-columns: 44px minmax(0, 2fr) minmax(0, 1fr) 0.8fr 0.9fr 0.9fr;
   padding: 8px 16px; border-top: 1px solid #1e1e2e;
-  font-size: 0.82rem; align-items: center;
+  font-size: 0.82rem; align-items: center; gap: 8px;
 }
+.recent-row > span { min-width: 0; }
 .recent-row:hover { background: rgba(255,255,255,0.02); }
 .recent-avatar { display: flex; align-items: center; }
 .recent-name {
@@ -151,6 +152,7 @@ body {
 }
 .recent-name-text {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0; flex: 1; word-break: break-word;
 }
 .recent-name-crop {
   width: 36px; height: 36px; border-radius: 8px;
@@ -1060,7 +1062,16 @@ body {
   background: #fff; border: 2px solid rgba(249,168,37,0.3);
 }
 .results-label-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.results-name { font-size: 1.3rem; font-weight: 700; color: #f9a825; }
+.results-name {
+  font-size: 1.3rem; font-weight: 700; color: #f9a825;
+  word-break: break-word; overflow-wrap: anywhere;
+}
+.results-title > div { min-width: 0; flex: 1; }
+.mole-detail-name {
+  word-break: break-word; overflow-wrap: anywhere;
+}
+.existing-name { word-break: break-word; overflow-wrap: anywhere; }
+.reveal-verdict-label { word-break: break-word; overflow-wrap: anywhere; }
 .results-pill {
   background: rgba(79,195,247,0.15); color: #4fc3f7;
   font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
