@@ -464,70 +464,245 @@ function AvatarBuilder({ config, onChange, onClose }) {
 // ═════════════════════════════════════════════════════════════
 // SHARE BUTTON
 // ═════════════════════════════════════════════════════════════
-function ShareButton({ measurements, classification, name }) {
+function ShareButton({ measurements, classification, analysis, cropImageDataUrl, name }) {
   const [showMenu, setShowMenu] = useState(false)
+  const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
 
   function buildMessage() {
     const ms = measurements || {}
     const lines = [
-      `🪙 A Penny For Cancer — Mole Report`,
-      `━━━━━━━━━━━━━━━━━━━━━━`,
+      `A Penny For Cancer — Mole Report`,
+      ``,
       `Mole: ${name || 'Unnamed'}`,
       ms.mole_diameter_mm ? `Diameter: ${ms.mole_diameter_mm} mm` : '',
       ms.mole_area_sq_mm ? `Area: ${ms.mole_area_sq_mm} mm²` : '',
-      classification ? `AI Comparison against Stanford MRA-MIDAS (https://stanfordaimi.azurewebsites.net/datasets/f4c2020f-801a-42dd-a477-a1a8357ef2a5): ${classification.label === 'yes' ? '⚠️ Suspicious' : '✅ Likely Benign'} (${classification.confidence}% confidence)` : '',
+      classification ? `AI Comparison: ${classification.label === 'yes' ? 'Suspicious' : 'Likely Benign'} (${classification.confidence}% confidence) — Stanford MRA-MIDAS` : '',
       ``,
-      classification?.label === 'yes'
-        ? `⚠️ This mole was flagged as suspicious when compared against 2,000+ dermoscopic samples from the Stanford MIDAS database. Please consider consulting a dermatologist.`
-        : `This mole was compared against 2,000+ dermoscopic samples from the Stanford MIDAS database using AI classification.`,
-      ``,
-      `🔗 Try it yourself: https://penny-for-cancer.vercel.app`,
-      ``,
-      `⚕️ Not a medical diagnosis. Always consult a qualified dermatologist.`
+      `Try it: https://penny-for-cancer.vercel.app`,
+      `Not a medical diagnosis. Consult a qualified dermatologist.`,
     ]
     return lines.filter(l => l !== '').join('\n')
   }
 
-  async function handleShare(method) {
-    const msg = buildMessage()
-    if (method === 'native' && navigator.share) {
+  // Render a share-friendly PNG of the results. Returns a Blob.
+  async function renderShareCard() {
+    const W = 1080, H = 1350
+    const canvas = document.createElement('canvas')
+    canvas.width = W; canvas.height = H
+    const ctx = canvas.getContext('2d')
+
+    // Background — dark gradient matching app
+    const bg = ctx.createLinearGradient(0, 0, 0, H)
+    bg.addColorStop(0, '#1a1a2e'); bg.addColorStop(0.4, '#13131a'); bg.addColorStop(1, '#0f0f13')
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H)
+
+    // Subtle gold glow at top
+    const glow = ctx.createRadialGradient(W / 2, -50, 50, W / 2, -50, 500)
+    glow.addColorStop(0, 'rgba(249,168,37,0.18)'); glow.addColorStop(1, 'rgba(249,168,37,0)')
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, W, 300)
+
+    // Header: penny + app name
+    const penny = await loadImage('/penny.png').catch(() => null)
+    if (penny) { ctx.drawImage(penny, 60, 60, 60, 60) }
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 36px -apple-system, Helvetica, sans-serif'
+    ctx.textBaseline = 'middle'
+    ctx.fillText('A Penny ', 140, 90)
+    const w1 = ctx.measureText('A Penny ').width
+    ctx.fillStyle = '#f9a825'; ctx.fillText('For Cancer', 140 + w1, 90)
+
+    // Mole name heading
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 64px -apple-system, Helvetica, sans-serif'
+    ctx.textBaseline = 'top'
+    const displayName = (name || 'Unnamed').slice(0, 28)
+    drawClampedText(ctx, displayName, 60, 170, W - 120)
+
+    // Crop image — centered, rounded square 560×560
+    const cropSize = 560
+    const cropX = (W - cropSize) / 2
+    const cropY = 260
+    if (cropImageDataUrl) {
       try {
-        await navigator.share({ title: 'A Penny For Cancer — Mole Report', text: msg })
+        const mole = await loadImage(cropImageDataUrl)
+        roundedClip(ctx, cropX, cropY, cropSize, cropSize, 24)
+        ctx.drawImage(mole, cropX, cropY, cropSize, cropSize)
+        ctx.restore()
+        // Frame
+        ctx.strokeStyle = '#2a2a4a'; ctx.lineWidth = 2
+        roundedRect(ctx, cropX, cropY, cropSize, cropSize, 24); ctx.stroke()
       } catch {}
-    } else if (method === 'email') {
-      const subject = encodeURIComponent('A Penny For Cancer — Mole Report')
-      const body = encodeURIComponent(msg)
-      window.open(`mailto:?subject=${subject}&body=${body}`)
-    } else if (method === 'copy') {
-      await navigator.clipboard.writeText(msg)
-      setCopied(true); setTimeout(() => setCopied(false), 2000)
+    } else {
+      ctx.fillStyle = '#1a1a2e'
+      roundedRect(ctx, cropX, cropY, cropSize, cropSize, 24); ctx.fill()
+      ctx.fillStyle = '#555'; ctx.font = '28px -apple-system, Helvetica, sans-serif'
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.fillText('no image', W / 2, cropY + cropSize / 2)
+      ctx.textAlign = 'left'
     }
-    setShowMenu(false)
+
+    // Verdict banner
+    const verdictY = cropY + cropSize + 30
+    const isSuspicious = classification?.label === 'yes'
+    const vColor = isSuspicious ? '#ef5350' : '#66bb6a'
+    const vBg = isSuspicious ? 'rgba(239,83,80,0.15)' : 'rgba(102,187,106,0.15)'
+    ctx.fillStyle = vBg
+    roundedRect(ctx, 60, verdictY, W - 120, 150, 20); ctx.fill()
+    ctx.strokeStyle = vColor; ctx.lineWidth = 3
+    roundedRect(ctx, 60, verdictY, W - 120, 150, 20); ctx.stroke()
+    // Icon
+    ctx.font = '80px -apple-system, Helvetica, sans-serif'
+    ctx.textBaseline = 'middle'
+    ctx.fillText(isSuspicious ? '⚠️' : '✅', 100, verdictY + 75)
+    // Label
+    ctx.fillStyle = vColor; ctx.font = 'bold 52px -apple-system, Helvetica, sans-serif'
+    ctx.fillText(isSuspicious ? 'Suspicious' : 'Likely Benign', 220, verdictY + 55)
+    // Sub
+    ctx.fillStyle = '#aaa'; ctx.font = '26px -apple-system, Helvetica, sans-serif'
+    const conf = classification ? `AI Comparison · ${classification.confidence}% confidence` : 'No AI comparison available'
+    ctx.fillText(conf, 220, verdictY + 100)
+
+    // Measurements tiles
+    const mY = verdictY + 180
+    const tileW = (W - 120 - 30) / 2, tileH = 120
+    drawTile(ctx, 60, mY, tileW, tileH, 'DIAMETER', measurements?.mole_diameter_mm ? `${measurements.mole_diameter_mm} mm` : '—')
+    drawTile(ctx, 60 + tileW + 30, mY, tileW, tileH, 'AREA', measurements?.mole_area_sq_mm ? `${measurements.mole_area_sq_mm} mm²` : '—')
+
+    // ABCDE strip
+    const abY = mY + tileH + 24
+    ctx.fillStyle = '#ce93d8'; ctx.font = 'bold 22px -apple-system, Helvetica, sans-serif'
+    ctx.textBaseline = 'top'
+    ctx.fillText('ABCDE ANALYSIS', 60, abY)
+    const abcItems = [
+      { letter: 'A', title: 'Asymmetry', level: analysis?.asymmetryLevel },
+      { letter: 'B', title: 'Border',    level: analysis?.borderLevel === 'smooth' ? 'low' : analysis?.borderLevel === 'irregular' ? 'moderate' : analysis?.borderLevel === 'jagged' ? 'high' : undefined },
+      { letter: 'C', title: 'Color',     level: analysis?.colorLevel === 'uniform' ? 'low' : analysis?.colorLevel === 'mixed' ? 'moderate' : analysis?.colorLevel === 'variable' ? 'high' : undefined },
+      { letter: 'D', title: 'Diameter',  level: measurements?.mole_diameter_mm >= 6 ? 'high' : measurements?.mole_diameter_mm >= 4 ? 'moderate' : measurements?.mole_diameter_mm ? 'low' : undefined },
+    ]
+    const badgeSize = 52, abStartY = abY + 40
+    const abGap = (W - 120 - badgeSize * abcItems.length) / (abcItems.length - 1)
+    abcItems.forEach((it, i) => {
+      const x = 60 + i * (badgeSize + abGap)
+      const color = it.level === 'high' ? '#ef5350' : it.level === 'moderate' ? '#ff9800' : it.level === 'low' ? '#66bb6a' : '#444'
+      ctx.fillStyle = color + '33'
+      ctx.beginPath(); ctx.arc(x + badgeSize / 2, abStartY + badgeSize / 2, badgeSize / 2, 0, Math.PI * 2); ctx.fill()
+      ctx.strokeStyle = color; ctx.lineWidth = 3
+      ctx.beginPath(); ctx.arc(x + badgeSize / 2, abStartY + badgeSize / 2, badgeSize / 2, 0, Math.PI * 2); ctx.stroke()
+      ctx.fillStyle = color; ctx.font = 'bold 28px -apple-system, Helvetica, sans-serif'
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      ctx.fillText(it.letter, x + badgeSize / 2, abStartY + badgeSize / 2)
+      ctx.fillStyle = '#aaa'; ctx.font = '16px -apple-system, Helvetica, sans-serif'
+      ctx.fillText(it.title, x + badgeSize / 2, abStartY + badgeSize + 16)
+      ctx.textAlign = 'left'
+    })
+
+    // Footer
+    ctx.textBaseline = 'bottom'; ctx.textAlign = 'center'
+    ctx.fillStyle = '#888'; ctx.font = '20px -apple-system, Helvetica, sans-serif'
+    ctx.fillText('penny-for-cancer.vercel.app  ·  Powered by Roboflow  ·  Stanford MRA-MIDAS', W / 2, H - 80)
+    ctx.fillStyle = '#666'; ctx.font = 'italic 18px -apple-system, Helvetica, sans-serif'
+    ctx.fillText('Not a medical diagnosis. Always consult a qualified dermatologist.', W / 2, H - 48)
+    ctx.textAlign = 'left'
+
+    return new Promise(resolve => canvas.toBlob(b => resolve(b), 'image/png'))
+  }
+
+  async function handleShare(method) {
+    setBusy(true)
+    try {
+      const msg = buildMessage()
+      if (method === 'copy') {
+        await navigator.clipboard.writeText(msg)
+        setCopied(true); setTimeout(() => setCopied(false), 2000)
+      } else {
+        const blob = await renderShareCard()
+        const file = blob ? new File([blob], `mole-report-${(name || 'unnamed').replace(/\s+/g, '_')}.png`, { type: 'image/png' }) : null
+        if (method === 'native' && navigator.share && file && navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ title: 'A Penny For Cancer — Mole Report', text: msg, files: [file] }).catch(() => {})
+        } else if (method === 'email') {
+          // Email can't carry a file via mailto; include the text and download the image so the user can attach it.
+          const subject = encodeURIComponent('A Penny For Cancer — Mole Report')
+          const body = encodeURIComponent(msg + '\n\n(Report card downloaded — attach it from your Downloads folder.)')
+          if (blob) downloadBlob(blob, `mole-report-${(name || 'unnamed').replace(/\s+/g, '_')}.png`)
+          window.open(`mailto:?subject=${subject}&body=${body}`)
+        } else {
+          // Download fallback
+          if (blob) downloadBlob(blob, `mole-report-${(name || 'unnamed').replace(/\s+/g, '_')}.png`)
+        }
+      }
+    } finally {
+      setBusy(false); setShowMenu(false)
+    }
   }
 
   return (
     <div className="share-container">
-      <button className="btn btn-share" onClick={() => setShowMenu(!showMenu)}>
-        <ShareIcon /> Share Results
+      <button className="btn btn-share" onClick={() => setShowMenu(!showMenu)} disabled={busy}>
+        <ShareIcon /> {busy ? 'Preparing…' : 'Share Results'}
       </button>
       {showMenu && (
         <div className="share-menu">
-          <button onClick={() => handleShare('copy')} className="share-option">
-            📋 {copied ? 'Copied!' : 'Copy to Clipboard'}
+          {navigator.share && (
+            <button onClick={() => handleShare('native')} className="share-option">
+              📱 Share report card
+            </button>
+          )}
+          <button onClick={() => handleShare('download')} className="share-option">
+            ⬇️ Download image
           </button>
           <button onClick={() => handleShare('email')} className="share-option">
             📧 Email to a Doctor
           </button>
-          {navigator.share && (
-            <button onClick={() => handleShare('native')} className="share-option">
-              📱 Share with a Friend
-            </button>
-          )}
+          <button onClick={() => handleShare('copy')} className="share-option">
+            📋 {copied ? 'Copied!' : 'Copy text summary'}
+          </button>
         </div>
       )}
     </div>
   )
+}
+
+// Canvas helpers used by the share card
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image()
+    img.crossOrigin = 'anonymous'
+    img.onload = () => resolve(img)
+    img.onerror = reject
+    img.src = src
+  })
+}
+function roundedRect(ctx, x, y, w, h, r) {
+  ctx.beginPath()
+  ctx.moveTo(x + r, y)
+  ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r)
+  ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h)
+  ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r)
+  ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y)
+  ctx.closePath()
+}
+function roundedClip(ctx, x, y, w, h, r) {
+  ctx.save(); roundedRect(ctx, x, y, w, h, r); ctx.clip()
+}
+function drawTile(ctx, x, y, w, h, label, value) {
+  ctx.fillStyle = '#1a1a2e'; roundedRect(ctx, x, y, w, h, 16); ctx.fill()
+  ctx.strokeStyle = '#2a2a4a'; ctx.lineWidth = 1; roundedRect(ctx, x, y, w, h, 16); ctx.stroke()
+  ctx.fillStyle = '#888'; ctx.font = 'bold 20px -apple-system, Helvetica, sans-serif'; ctx.textBaseline = 'top'
+  ctx.fillText(label, x + 20, y + 20)
+  ctx.fillStyle = '#f9a825'; ctx.font = 'bold 44px -apple-system, Helvetica, sans-serif'
+  ctx.fillText(value, x + 20, y + 50)
+}
+function drawClampedText(ctx, text, x, y, maxWidth) {
+  let t = text
+  while (ctx.measureText(t).width > maxWidth && t.length > 3) t = t.slice(0, -2)
+  if (t.length < text.length) t = t.slice(0, -1) + '…'
+  ctx.fillText(t, x, y)
+}
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = filename
+  document.body.appendChild(a); a.click(); a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
 }
 
 
@@ -1248,7 +1423,7 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
         ) : (
           <div className="recent-table">
             <div className="recent-header">
-              <span></span><span></span><span>Name</span><span>Date</span><span>Diameter</span><span>AI Comparison</span><span></span>
+              <span></span><span></span><span>Name</span><span>Date · Diameter · AI Comparison</span><span></span>
             </div>
             {recent.map(m => {
               const ms = m.measurements || {}
@@ -1267,16 +1442,20 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
                   <span className="recent-name">
                     <span className="recent-name-text">{m.name}</span>
                   </span>
-                  <span className="recent-date">{m.date}</span>
-                  <span className={`recent-diam ${ms.mole_diameter_mm >= 6 ? 'danger' : ms.mole_diameter_mm >= 4 ? 'warn' : 'safe'}`}>
-                    {ms.mole_diameter_mm ? `${ms.mole_diameter_mm} mm` : '—'}
-                  </span>
-                  <span className={`recent-cls ${cls?.label === 'yes' ? 'cls-flag' : cls?.label === 'no' ? 'cls-ok' : ''}`}>
-                    {cls ? (
-                      cls.label === 'yes'
-                        ? <>⚠️ Suspicious · {cls.confidence}%</>
-                        : <>Likely benign · {cls.confidence}%</>
-                    ) : '—'}
+                  <span className="recent-meta">
+                    <span className="recent-date">{m.date}</span>
+                    <span className="recent-sep"> · </span>
+                    <span className={`recent-diam ${ms.mole_diameter_mm >= 6 ? 'danger' : ms.mole_diameter_mm >= 4 ? 'warn' : 'safe'}`}>
+                      {ms.mole_diameter_mm ? `${ms.mole_diameter_mm} mm` : '—'}
+                    </span>
+                    <span className="recent-sep"> · </span>
+                    <span className={`recent-cls ${cls?.label === 'yes' ? 'cls-flag' : cls?.label === 'no' ? 'cls-ok' : ''}`}>
+                      {cls ? (
+                        cls.label === 'yes'
+                          ? <>⚠️ Suspicious {cls.confidence}%</>
+                          : <>Likely benign {cls.confidence}%</>
+                      ) : '—'}
+                    </span>
                   </span>
                   <span className="recent-actions" onClick={e => e.stopPropagation()}>
                     <button className="link-btn" onClick={() => onSelectMole(m)}>Re-measure</button>
@@ -2000,7 +2179,7 @@ function ResultsPage({ name, setName, date, setDate, notes, setNotes, avatarConf
         </div>
       )}
       <div className="results-footer-actions">
-        <button className="btn btn-start-over" onClick={onStartOver}>Start a completely new analysis →</button>
+        <button className="btn btn-start-over" onClick={onStartOver}>Return to home →</button>
       </div>
     </div>
   )

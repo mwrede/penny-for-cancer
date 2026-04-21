@@ -137,17 +137,23 @@ img, svg { max-width: 100%; }
   background: #13131a; border: 1px solid #2a2a4a; border-radius: 12px; overflow: hidden;
 }
 .recent-header {
-  display: grid; grid-template-columns: 44px 44px minmax(0, 2fr) minmax(0, 1fr) 0.8fr 0.9fr 0.9fr;
+  display: grid; grid-template-columns: 44px 44px minmax(0, 1.4fr) minmax(0, 2fr) auto;
   padding: 10px 16px; background: #1a1a2e;
   font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; color: #666;
-  align-items: center; gap: 8px;
+  align-items: center; gap: 12px;
 }
 .recent-row {
-  display: grid; grid-template-columns: 44px 44px minmax(0, 2fr) minmax(0, 1fr) 0.8fr 0.9fr 0.9fr;
+  display: grid; grid-template-columns: 44px 44px minmax(0, 1.4fr) minmax(0, 2fr) auto;
   padding: 8px 16px; border-top: 1px solid #1e1e2e;
-  font-size: 0.82rem; align-items: center; gap: 8px;
+  font-size: 0.82rem; align-items: center; gap: 12px;
 }
 .recent-row > span { min-width: 0; }
+.recent-meta {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 0.8rem; flex-wrap: wrap;
+  overflow: hidden;
+}
+.recent-sep { color: #444; flex-shrink: 0; }
 .recent-crop-col {
   display: flex; align-items: center; justify-content: center;
 }
@@ -1165,17 +1171,17 @@ img, svg { max-width: 100%; }
   /* Recent measurements → card layout */
   .recent-table { background: transparent; border: 0; }
   .recent-header { display: none; }
-  .recent-row {
-    display: grid;
+  .recent-row, .recent-header {
     grid-template-columns: 40px 40px minmax(0, 1fr) auto;
     grid-template-areas:
       "avatar crop name    actions"
       "meta   meta meta    meta";
-    column-gap: 10px; row-gap: 8px;
+    column-gap: 10px; row-gap: 6px;
     padding: 12px; background: #13131a;
     border: 1px solid #2a2a4a; border-radius: 10px; margin-bottom: 8px;
     min-width: 0;
   }
+  .recent-header { display: none; }
   .recent-row .recent-avatar { grid-area: avatar; align-self: center; }
   .recent-row .recent-crop-col { grid-area: crop; align-self: center; }
   .recent-row .recent-crop-img { width: 40px; height: 40px; }
@@ -1185,17 +1191,9 @@ img, svg { max-width: 100%; }
   }
   .recent-row .recent-name-text { font-size: 0.95rem; }
   .recent-row .recent-actions { grid-area: actions; align-self: center; }
-
-  /* All the meta fields share row 2 in a wrapping flex strip */
-  .recent-row .recent-date,
-  .recent-row .recent-diam,
-  .recent-row .recent-cls {
-    grid-area: meta; display: inline;
-    font-size: 0.78rem; margin-right: 0;
-  }
-  .recent-row .recent-date::after,
-  .recent-row .recent-diam::after {
-    content: " · "; color: #444;
+  .recent-row .recent-meta {
+    grid-area: meta; font-size: 0.76rem;
+    flex-wrap: wrap; column-gap: 6px; row-gap: 2px;
   }
 
   /* Sidebar stacks over canvas */
