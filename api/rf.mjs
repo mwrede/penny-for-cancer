@@ -12,8 +12,6 @@ const ALLOWED_WORKFLOWS = new Set([
   'penny-area-measurement-pipeline-1776292482637',
   'custom-workflow-11',
 ])
-const DAILY_LIMIT = 20
-
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -68,7 +66,7 @@ export default async function handler(req) {
   if (!workflowId || !imageBase64) return json(400, { error: 'workflowId and imageBase64 required' })
   if (!ALLOWED_WORKFLOWS.has(workflowId)) return json(400, { error: 'Unknown workflow' })
 
-  // Rate limit: 20 per UTC day per (user or IP)
+  // Usage still tracked per (user or IP, day) for visibility, but no cap enforced.
   const day = today()
   const { data: existing } = await supabase
     .from('api_usage_anon')
@@ -77,13 +75,6 @@ export default async function handler(req) {
     .eq('day', day)
     .maybeSingle()
   const currentCount = existing?.count ?? 0
-  if (currentCount >= DAILY_LIMIT) {
-    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-    return json(429, {
-      error: `Daily limit of ${DAILY_LIMIT} analyses reached. Come back tomorrow!`,
-      resetAt: tomorrow,
-    })
-  }
 
   // Call Roboflow
   const url = `https://serverless.roboflow.com/${RF_WORKSPACE}/workflows/${workflowId}`
