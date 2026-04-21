@@ -1880,12 +1880,39 @@ function AbcRow({ letter, title, value, level, hint }) {
 
 function parseClassification(result) {
   // Deep-walk the response and return the first {class, confidence} we find.
-  // Roboflow workflow shapes vary — sometimes nested under outputs[0].model_predictions,
-  // sometimes { predictions: { class, confidence } }, sometimes { top, predictions: { Yes: {confidence}, No: {confidence} } }.
-  function walk(node) {
-    if (!node || typeof node !== 'object') return null
+  // Some Roboflow workflows stringify their output as a Python dict repr (single quotes)
+  // under e.g. "output_1", so we also try to parse strings that look like that.
+  function tryParsePyDict(str) {
+    if (typeof str !== 'string') return null
+    const s = str.trim()
+    if (!(s.startsWith('{') || s.startsWith('['))) return null
+    try {
+      // Python repr → JSON: single → double quotes, True/False/None → true/false/null.
+      // This is coarse but works because the response values here don't contain quotes/apostrophes.
+      const jsonish = s.replace(/'/g, '"').replace(/\bTrue\b/g, 'true').replace(/\bFalse\b/g, 'false').replace(/\bNone\b/g, 'null')
+      return JSON.parse(jsonish)
+    } catch {
+      // Fallback: pull class + confidence directly with regex
+      const classMatch = s.match(/['"]class['"]\s*:\s*['"]([^'"]+)['"]/i) || s.match(/['"]top['"]\s*:\s*['"]([^'"]+)['"]/i)
+      const confMatch = s.match(/['"]confidence['"]\s*:\s*([\d.]+)/i)
+      if (classMatch && confMatch) return { class: classMatch[1], confidence: parseFloat(confMatch[1]) }
+      return null
+    }
+  }
 
-    // Direct: { class: "Yes", confidence: 0.98 } or class_id + confidence
+  function walk(node) {
+    if (node == null) return null
+
+    // String that looks like a serialized dict — parse and recurse
+    if (typeof node === 'string') {
+      const parsed = tryParsePyDict(node)
+      if (parsed) return walk(parsed)
+      return null
+    }
+
+    if (typeof node !== 'object') return null
+
+    // Direct: { class: "Yes", confidence: 0.98 } or { top: "Yes", confidence: 0.98 }
     if (typeof node.confidence === 'number' && (typeof node.class === 'string' || typeof node.top === 'string')) {
       return { label: (node.class || node.top), confidence: node.confidence }
     }
