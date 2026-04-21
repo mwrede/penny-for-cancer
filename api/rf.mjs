@@ -66,7 +66,8 @@ export default async function handler(req) {
   if (!workflowId || !imageBase64) return json(400, { error: 'workflowId and imageBase64 required' })
   if (!ALLOWED_WORKFLOWS.has(workflowId)) return json(400, { error: 'Unknown workflow' })
 
-  // Usage still tracked per (user or IP, day) for visibility, but no cap enforced.
+  // Soft abuse cap: 500 analyses per UTC day per (user or IP). Normal users won't hit this.
+  const DAILY_LIMIT = 500
   const day = today()
   const { data: existing } = await supabase
     .from('api_usage_anon')
@@ -75,6 +76,13 @@ export default async function handler(req) {
     .eq('day', day)
     .maybeSingle()
   const currentCount = existing?.count ?? 0
+  if (currentCount >= DAILY_LIMIT) {
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    return json(429, {
+      error: `Daily limit of ${DAILY_LIMIT} analyses reached. Come back tomorrow!`,
+      resetAt: tomorrow,
+    })
+  }
 
   // Call Roboflow
   const url = `https://serverless.roboflow.com/${RF_WORKSPACE}/workflows/${workflowId}`
