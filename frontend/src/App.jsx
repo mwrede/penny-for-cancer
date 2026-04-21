@@ -1028,7 +1028,7 @@ export default function App() {
         <div className="app-header-main" onClick={goHome} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
           <img src="/penny.png" alt="Penny" className="header-penny" />
           <h1>A Penny <span>For Cancer</span></h1>
-          <p className="header-tagline">Measure moles using a penny for scale</p>
+          <p className="header-tagline">Measure moles and concerning skin using a penny for scale</p>
         </div>
         <div className="app-header-user">
           {session ? (
