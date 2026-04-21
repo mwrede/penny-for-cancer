@@ -1244,18 +1244,22 @@ function HomePage({ moles, onNew, onExisting, onSelectMole, onDelete }) {
                 <div key={m.id} className="recent-row recent-row-clickable" onClick={() => setDetailMole(m)}>
                   <span className="recent-avatar">
                     <MoleAvatar config={m.avatar_config} name={m.name || 'Mole'} size={36} />
+                  </span>
+                  <span className="recent-name">
+                    <span className="recent-name-text">{m.name}</span>
                     {m.crop_image && (
-                      <img src={m.crop_image} alt="" className="recent-crop" />
+                      <img src={m.crop_image} alt="" className="recent-name-crop" />
                     )}
                   </span>
-                  <span className="recent-name">{m.name}</span>
                   <span className="recent-date">{m.date}</span>
                   <span className={`recent-diam ${ms.mole_diameter_mm >= 6 ? 'danger' : ms.mole_diameter_mm >= 4 ? 'warn' : 'safe'}`}>
                     {ms.mole_diameter_mm ? `${ms.mole_diameter_mm} mm` : '—'}
                   </span>
                   <span className={`recent-cls ${cls?.label === 'yes' ? 'cls-flag' : cls?.label === 'no' ? 'cls-ok' : ''}`}>
                     {cls ? (
-                      <>{cls.label === 'yes' ? '⚠️' : '✅'} {cls.confidence}%</>
+                      cls.label === 'yes'
+                        ? <>⚠️ Suspicious · {cls.confidence}%</>
+                        : <>Likely benign · {cls.confidence}%</>
                     ) : '—'}
                   </span>
                   <span className="recent-actions" onClick={e => e.stopPropagation()}>
